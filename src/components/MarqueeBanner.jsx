@@ -1,6 +1,6 @@
 import { useReducedMotion } from 'framer-motion'
 
-const MARQUEE_TEXT = 'FERAL \u2022 UNTAMED \u2022 FERAL \u2022 UNTAMED \u2022 FERAL \u2022 UNTAMED \u2022 FERAL \u2022 UNTAMED \u2022 '
+const MARQUEE_TEXT = 'F3RAL \u2022 UNTAMED \u2022 F3RAL \u2022 UNTAMED \u2022 F3RAL \u2022 UNTAMED \u2022 F3RAL \u2022 UNTAMED \u2022 '
 
 const MarqueeBanner = ({ opacity = 0.18, fontSize = '6rem', className = '' }) => {
   const shouldReduceMotion = useReducedMotion()

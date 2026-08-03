@@ -1,13 +1,26 @@
-import { createContext, useContext, useReducer, useMemo } from 'react'
+import { createContext, useContext, useReducer, useMemo, useCallback, useEffect, useRef, useState } from 'react'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { db } from '../lib/firebase'
+import { useAuth } from './AuthContext'
+
+const GUEST_CART_KEY = 'feral_guest_cart'
 
 const CartContext = createContext(null)
 
+// ─── Reducer ─────────────────────────────────────────────────────────────────
+// Uses String() comparison for IDs to work with both Firestore string IDs and
+// any legacy numeric IDs that may exist in guest carts.
+
 const cartReducer = (state, action) => {
   switch (action.type) {
+    case 'SET_ITEMS':
+      return action.payload
+
     case 'ADD_ITEM': {
       const { product, size, quantity } = action.payload
       const existingIndex = state.findIndex(
-        (item) => item.product.id === product.id && item.size === size
+        (item) =>
+          String(item.product.id) === String(product.id) && item.size === size
       )
       if (existingIndex >= 0) {
         const updated = [...state]
@@ -23,7 +36,8 @@ const cartReducer = (state, action) => {
     case 'REMOVE_ITEM': {
       const { productId, size } = action.payload
       return state.filter(
-        (item) => !(item.product.id === productId && item.size === size)
+        (item) =>
+          !(String(item.product.id) === String(productId) && item.size === size)
       )
     }
 
@@ -31,11 +45,12 @@ const cartReducer = (state, action) => {
       const { productId, size, quantity } = action.payload
       if (quantity <= 0) {
         return state.filter(
-          (item) => !(item.product.id === productId && item.size === size)
+          (item) =>
+            !(String(item.product.id) === String(productId) && item.size === size)
         )
       }
       return state.map((item) =>
-        item.product.id === productId && item.size === size
+        String(item.product.id) === String(productId) && item.size === size
           ? { ...item, quantity }
           : item
       )
@@ -49,24 +64,134 @@ const cartReducer = (state, action) => {
   }
 }
 
+// ─── Merge guest cart into existing Firestore cart ────────────────────────────
+
+function mergeGuestCart(firestoreCart, guestCart) {
+  const merged = [...firestoreCart]
+  for (const guestItem of guestCart) {
+    const idx = merged.findIndex(
+      (item) =>
+        String(item.product.id) === String(guestItem.product.id) &&
+        item.size === guestItem.size
+    )
+    if (idx >= 0) {
+      merged[idx] = { ...merged[idx], quantity: merged[idx].quantity + guestItem.quantity }
+    } else {
+      merged.push(guestItem)
+    }
+  }
+  return merged
+}
+
+// ─── Provider ─────────────────────────────────────────────────────────────────
+
 export const CartProvider = ({ children }) => {
+  const { currentUser, loading: authLoading } = useAuth()
   const [items, dispatch] = useReducer(cartReducer, [])
+  const [cartLoading, setCartLoading] = useState(true)
+  // Prevents sync writes during initialization
+  const initialized = useRef(false)
 
-  const addItem = (product, size, quantity = 1) => {
-    dispatch({ type: 'ADD_ITEM', payload: { product, size, quantity } })
-  }
+  // ── Initialization: load cart when auth state resolves ─────────────────────
+  useEffect(() => {
+    if (authLoading) return // wait for Firebase Auth to resolve
 
-  const removeItem = (productId, size) => {
-    dispatch({ type: 'REMOVE_ITEM', payload: { productId, size } })
-  }
+    initialized.current = false
+    setCartLoading(true)
 
-  const updateQuantity = (productId, size, quantity) => {
-    dispatch({ type: 'UPDATE_QUANTITY', payload: { productId, size, quantity } })
-  }
+    const initCart = async () => {
+      try {
+        if (currentUser) {
+          // Load from Firestore
+          const snap = await getDoc(doc(db, 'users', currentUser.uid))
+          const firestoreCart = snap.exists() ? (snap.data().cart ?? []) : []
 
-  const clearCart = () => {
+          // Merge any guest cart collected before login
+          let raw
+          try { raw = localStorage.getItem(GUEST_CART_KEY) } catch { raw = null }
+          const guestCart = raw ? JSON.parse(raw) : []
+
+          if (guestCart.length > 0) {
+            const merged = mergeGuestCart(firestoreCart, guestCart)
+            dispatch({ type: 'SET_ITEMS', payload: merged })
+            // Persist merged cart; clear guest storage
+            try { localStorage.removeItem(GUEST_CART_KEY) } catch { /* ignore */ }
+            await setDoc(doc(db, 'users', currentUser.uid), { cart: merged }, { merge: true })
+          } else {
+            dispatch({ type: 'SET_ITEMS', payload: firestoreCart })
+          }
+        } else {
+          // Load from localStorage (guest)
+          let raw
+          try { raw = localStorage.getItem(GUEST_CART_KEY) } catch { raw = null }
+          dispatch({ type: 'SET_ITEMS', payload: raw ? JSON.parse(raw) : [] })
+        }
+      } catch (err) {
+        console.error('[FERAL] Cart init error:', err)
+        dispatch({ type: 'SET_ITEMS', payload: [] })
+      } finally {
+        initialized.current = true
+        setCartLoading(false)
+      }
+    }
+
+    initCart()
+  }, [currentUser, authLoading])
+
+  // ── Storage sync helper (called after every user-initiated action) ──────────
+  const syncToStorage = useCallback(
+    (newItems) => {
+      if (currentUser) {
+        setDoc(doc(db, 'users', currentUser.uid), { cart: newItems }, { merge: true }).catch(
+          (err) => console.error('[FERAL] Cart sync error:', err)
+        )
+      } else {
+        try {
+          localStorage.setItem(GUEST_CART_KEY, JSON.stringify(newItems))
+        } catch { /* localStorage might be unavailable */ }
+      }
+    },
+    [currentUser]
+  )
+
+  // ── Public API ─────────────────────────────────────────────────────────────
+  // Each action computes the new state via cartReducer (pure), dispatches it,
+  // then syncs to the appropriate store — avoiding effect timing issues.
+
+  const addItem = useCallback(
+    (product, size, quantity = 1) => {
+      const action = { type: 'ADD_ITEM', payload: { product, size, quantity } }
+      const newItems = cartReducer(items, action)
+      dispatch(action)
+      syncToStorage(newItems)
+    },
+    [items, syncToStorage]
+  )
+
+  const removeItem = useCallback(
+    (productId, size) => {
+      const action = { type: 'REMOVE_ITEM', payload: { productId, size } }
+      const newItems = cartReducer(items, action)
+      dispatch(action)
+      syncToStorage(newItems)
+    },
+    [items, syncToStorage]
+  )
+
+  const updateQuantity = useCallback(
+    (productId, size, quantity) => {
+      const action = { type: 'UPDATE_QUANTITY', payload: { productId, size, quantity } }
+      const newItems = cartReducer(items, action)
+      dispatch(action)
+      syncToStorage(newItems)
+    },
+    [items, syncToStorage]
+  )
+
+  const clearCart = useCallback(() => {
     dispatch({ type: 'CLEAR_CART' })
-  }
+    syncToStorage([])
+  }, [syncToStorage])
 
   const itemCount = useMemo(
     () => items.reduce((total, item) => total + item.quantity, 0),
@@ -79,7 +204,18 @@ export const CartProvider = ({ children }) => {
   )
 
   return (
-    <CartContext.Provider value={{ items, addItem, removeItem, updateQuantity, clearCart, itemCount, subtotal }}>
+    <CartContext.Provider
+      value={{
+        items,
+        addItem,
+        removeItem,
+        updateQuantity,
+        clearCart,
+        itemCount,
+        subtotal,
+        cartLoading,
+      }}
+    >
       {children}
     </CartContext.Provider>
   )

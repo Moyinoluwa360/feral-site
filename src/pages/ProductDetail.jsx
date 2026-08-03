@@ -1,18 +1,21 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { FiCheck, FiMinus, FiPlus } from 'react-icons/fi'
-import { products } from '../data/products'
+import { useProduct, useProducts } from '../hooks/useProducts'
 import { useCart } from '../context/CartContext'
 import ProductCard from '../components/ProductCard'
 import GlitchText from '../components/GlitchText'
+import SEOHead from '../components/SEOHead'
+import { CURRENCY_SYMBOL } from '../lib/shipping'
 
 const ProductDetail = () => {
   const { id } = useParams()
   const shouldReduceMotion = useReducedMotion()
   const { addItem } = useCart()
 
-  const product = products.find((p) => p.id === parseInt(id, 10))
+  const { product, loading, error } = useProduct(id)
+  const { products: allProducts } = useProducts()
 
   const [mainImage, setMainImage] = useState(0)
   const [selectedSize, setSelectedSize] = useState(null)
@@ -20,7 +23,22 @@ const ProductDetail = () => {
   const [activeTab, setActiveTab] = useState('description')
   const [addedToCart, setAddedToCart] = useState(false)
 
-  if (!product) {
+  const relatedProducts = useMemo(() => {
+    if (!product) return []
+    return allProducts
+      .filter((p) => String(p.id) !== String(product.id))
+      .slice(0, 3)
+  }, [product, allProducts])
+
+  if (loading) {
+    return (
+      <div className="bg-[#0a0a0a] min-h-screen pt-16 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-white/10 border-t-[#c81e1e] rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (error || !product) {
     return (
       <div className="bg-[#0a0a0a] min-h-screen pt-16 flex items-center justify-center px-4">
         <div className="text-center">
@@ -41,18 +59,27 @@ const ProductDetail = () => {
     )
   }
 
-  const relatedProducts = products
-    .filter((p) => p.category === product.category && p.id !== product.id)
-    .slice(0, 3)
+  // Check available stock for the selected size
+  const stockForSize = selectedSize ? (product.stock?.[selectedSize] ?? 0) : null
+  const outOfStock = stockForSize !== null && stockForSize === 0
 
   const handleAddToCart = () => {
-    if (!selectedSize) return
+    if (!selectedSize || outOfStock) return
     addItem(product, selectedSize, quantity)
     setAddedToCart(true)
     setTimeout(() => setAddedToCart(false), 2000)
   }
 
   return (
+    <>
+    <SEOHead
+      title={product.name}
+      description={product.description}
+      image={product.images?.[0]}
+      path={`/product/${id}`}
+      type="product"
+      productData={product}
+    />
     <div className="bg-[#0a0a0a] min-h-screen pt-16">
       <div className="max-w-screen-xl mx-auto px-4 md:px-8 py-12">
         {/* Breadcrumb */}
@@ -116,10 +143,6 @@ const ProductDetail = () => {
 
           {/* Right: Product Info */}
           <div>
-            <p className="text-[#c81e1e] font-['Space_Grotesk'] text-xs uppercase tracking-[0.4em] mb-3 capitalize">
-              {product.category}
-            </p>
-
             <GlitchText
               as="h1"
               className="text-white mb-4"
@@ -129,7 +152,7 @@ const ProductDetail = () => {
             </GlitchText>
 
             <p className="text-white font-['Space_Grotesk'] text-3xl font-semibold mb-8">
-              ${product.price}
+              {CURRENCY_SYMBOL}{product.price.toLocaleString()}
             </p>
 
             {/* Size Selector */}
@@ -145,24 +168,32 @@ const ProductDetail = () => {
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
-                {product.sizes.map((size) => (
-                  <button
-                    key={size}
-                    onClick={() => setSelectedSize(size)}
-                    className={`min-w-[52px] h-10 px-3 font-['Big_Shoulders_Stencil'] font-bold text-sm uppercase tracking-wider transition-all duration-150 ${
-                      selectedSize === size
-                        ? 'bg-[#c81e1e] text-white'
-                        : 'border border-white/20 text-white/50 hover:border-white/60 hover:text-white'
-                    }`}
-                    style={
-                      selectedSize === size
-                        ? { clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' }
-                        : {}
-                    }
-                  >
-                    {size}
-                  </button>
-                ))}
+                {product.sizes.map((size) => {
+                  const sizeStock = product.stock?.[size] ?? null
+                  const soldOut = sizeStock !== null && sizeStock === 0
+                  return (
+                    <button
+                      key={size}
+                      onClick={() => !soldOut && setSelectedSize(size)}
+                      disabled={soldOut}
+                      title={soldOut ? 'Out of stock' : undefined}
+                      className={`min-w-[52px] h-10 px-3 font-['Big_Shoulders_Stencil'] font-bold text-sm uppercase tracking-wider transition-all duration-150 ${
+                        soldOut
+                          ? 'border border-white/10 text-white/20 cursor-not-allowed line-through'
+                          : selectedSize === size
+                          ? 'bg-[#c81e1e] text-white'
+                          : 'border border-white/20 text-white/50 hover:border-white/60 hover:text-white'
+                      }`}
+                      style={
+                        selectedSize === size && !soldOut
+                          ? { clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))' }
+                          : {}
+                      }
+                    >
+                      {size}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
@@ -193,14 +224,14 @@ const ProductDetail = () => {
             {/* Add to Cart */}
             <button
               onClick={handleAddToCart}
-              disabled={!selectedSize}
+              disabled={!selectedSize || outOfStock}
               className={`w-full py-4 font-['Big_Shoulders_Stencil'] font-bold text-base uppercase tracking-[0.25em] transition-all duration-200 mb-4 ${
-                !selectedSize
+                !selectedSize || outOfStock
                   ? 'bg-white/10 text-white/30 cursor-not-allowed'
                   : 'btn-primary w-full'
               }`}
               style={
-                selectedSize
+                selectedSize && !outOfStock
                   ? { clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))' }
                   : {}
               }
@@ -299,6 +330,7 @@ const ProductDetail = () => {
         )}
       </div>
     </div>
+    </>
   )
 }
 

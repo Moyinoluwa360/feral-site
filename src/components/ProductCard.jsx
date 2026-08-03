@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
+import { CURRENCY_SYMBOL } from '../lib/shipping'
 
 const ProductCard = ({ product }) => {
   const shouldReduceMotion = useReducedMotion()
@@ -68,10 +69,7 @@ const ProductCard = ({ product }) => {
           </h3>
           <div className="flex items-center justify-between mt-1">
             <span className="text-white/60 font-['Space_Grotesk'] text-sm">
-              ${product.price}
-            </span>
-            <span className="text-white/30 font-['Space_Grotesk'] text-xs capitalize">
-              {product.category}
+              {CURRENCY_SYMBOL}{product.price.toLocaleString()}
             </span>
           </div>
         </div>

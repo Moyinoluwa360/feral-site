@@ -47,7 +47,7 @@ const NotFound = () => {
             className="text-white mb-4"
             style={{ fontSize: 'clamp(1.5rem, 5vw, 3rem)', display: 'block', lineHeight: 1 }}
           >
-            YOU'VE GONE FERAL
+            YOU'VE GONE F3RAL
           </GlitchText>
 
           <p className="text-white/30 font-['Space_Grotesk'] text-sm mb-10 max-w-xs mx-auto">

@@ -71,7 +71,7 @@ const Contact = () => {
             <div className="flex items-center gap-3 mb-8">
               <img
                 src="/logo2.jpeg"
-                alt="FERAL"
+                alt="F3RAL"
                 className="w-14 h-14 object-cover grayscale"
                 style={{ clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)' }}
               />
@@ -79,12 +79,12 @@ const Contact = () => {
                 className="text-white text-2xl"
                 style={{ fontFamily: "'Big Shoulders Stencil', sans-serif", fontWeight: 700, letterSpacing: '0.15em' }}
               >
-                FERAL
+                F3RAL
               </span>
             </div>
 
             <p className="text-white/40 font-['Space_Grotesk'] text-sm leading-relaxed mb-10 max-w-sm">
-              We operate at the edge. Reach us for collaborations, press enquiries, wholesale, or just to say you've gone feral.
+              We operate at the edge. Reach us for collaborations, press enquiries, wholesale, or just to say you've gone f3ral.
             </p>
 
             <div className="flex flex-col gap-5 mb-10">

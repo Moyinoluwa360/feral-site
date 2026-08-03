@@ -23,7 +23,7 @@ const Footer = () => {
             <div className="flex items-center gap-3">
               <img
                 src="/logo2.jpeg"
-                alt="FERAL"
+                alt="F3RAL"
                 className="w-12 h-12 object-cover opacity-90"
                 style={{ clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%)' }}
               />
@@ -31,7 +31,7 @@ const Footer = () => {
                 className="text-white text-2xl"
                 style={{ fontFamily: "'Big Shoulders Stencil', sans-serif", fontWeight: 700, letterSpacing: '0.15em' }}
               >
-                FERAL
+                F3RAL
               </span>
             </div>
             <p className="text-white/50 font-['Space_Grotesk'] text-sm leading-relaxed max-w-xs">
@@ -59,7 +59,7 @@ const Footer = () => {
                 { label: 'Lookbook', to: '/lookbook' },
                 { label: 'About', to: '/about' },
                 { label: 'Contact', to: '/contact' },
-                { label: 'Cart', to: '/cart' },
+                { label: 'My Account', to: '/account' },
               ].map((link) => (
                 <li key={link.to}>
                   <Link
@@ -115,7 +115,7 @@ const Footer = () => {
       <div className="border-t border-white/5 px-4 md:px-8 py-5">
         <div className="max-w-screen-xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-white/30 font-['Space_Grotesk'] text-xs">
-            &copy; {new Date().getFullYear()} FERAL. All rights reserved.
+            &copy; {new Date().getFullYear()} F3RAL. All rights reserved.
           </p>
 
           <div className="flex items-center gap-5">

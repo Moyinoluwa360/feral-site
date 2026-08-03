@@ -31,7 +31,7 @@ const LOOKBOOK_IMAGES = [
     url: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&q=80',
     alt: 'Editorial 05',
     span: 'half',
-    caption: 'FERAL MOTION',
+    caption: 'F3RAL MOTION',
   },
   {
     url: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?w=800&q=80',
@@ -170,7 +170,7 @@ const Lookbook = () => {
       {/* Footer note */}
       <div className="max-w-screen-xl mx-auto px-4 md:px-8 pb-16 text-center">
         <p className="text-white/15 font-['Big_Shoulders_Stencil'] font-bold text-xs uppercase tracking-[0.5em]">
-          FERAL — DROP 001 — VISUAL FIELD
+          F3RAL — DROP 001 — VISUAL FIELD
         </p>
       </div>
     </div>

@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# Block account and checkout pages from crawling
+Disallow: /account
+Disallow: /checkout
+Disallow: /order-confirmation/
+
+Sitemap: https://yoursite.com/sitemap.xml

@@ -16,11 +16,11 @@ export const products = [
   },
   {
     id: 2,
-    name: "FERAL STENCIL TEE",
+    name: "F3RAL STENCIL TEE",
     price: 68,
     category: "tops",
     sizes: ["XS","S","M","L","XL","2XL"],
-    description: "Heavyweight 320gsm cotton with oversized FERAL stencil graphic. Pre-distressed finish.",
+    description: "Heavyweight 320gsm cotton with oversized F3RAL stencil graphic. Pre-distressed finish.",
     materials: "100% Heavyweight Cotton. Garment washed.",
     images: [
       "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=600&q=80",
@@ -80,7 +80,7 @@ export const products = [
     price: 178,
     category: "bottoms",
     sizes: ["28","30","32","34","36","38"],
-    description: "Hand-finished raw denim with FERAL patch detail. Custom chainstitched hem.",
+    description: "Hand-finished raw denim with F3RAL patch detail. Custom chainstitched hem.",
     materials: "100% Selvedge Denim. 14oz weight. Sanforized.",
     images: [
       "https://images.unsplash.com/photo-1542272604-787c3835535d?w=600&q=80",
@@ -140,7 +140,7 @@ export const products = [
     price: 84,
     category: "tops",
     sizes: ["XS","S","M","L","XL","2XL"],
-    description: "Full-length ribbed cuffs, oversized fit. All-over sub-dye FERAL claw mark.",
+    description: "Full-length ribbed cuffs, oversized fit. All-over sub-dye F3RAL claw mark.",
     materials: "100% Polyester. Sublimation printed. Quick-dry.",
     images: [
       "https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=600&q=80",

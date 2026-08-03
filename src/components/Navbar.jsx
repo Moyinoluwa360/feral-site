@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
-import { FiShoppingBag, FiMenu, FiX } from 'react-icons/fi'
+import { FiShoppingBag, FiMenu, FiX, FiUser } from 'react-icons/fi'
 import { useCart } from '../context/CartContext'
+import { useAuth } from '../context/AuthContext'
 
 const navLinks = [
   { label: 'HOME', to: '/' },
   { label: 'SHOP', to: '/shop' },
+  { label: 'ORDERS', to: '/orders' },
   { label: 'LOOKBOOK', to: '/lookbook' },
   { label: 'ABOUT', to: '/about' },
   { label: 'CONTACT', to: '/contact' },
@@ -14,6 +16,7 @@ const navLinks = [
 
 const Navbar = () => {
   const { itemCount } = useCart()
+  const { currentUser } = useAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const shouldReduceMotion = useReducedMotion()
@@ -68,7 +71,7 @@ const Navbar = () => {
           <Link to="/" className="flex items-center gap-2 z-10">
             <img
               src="/logo1.jpeg"
-              alt="FERAL"
+              alt="F3RAL"
               className="h-10 w-10 object-cover"
               style={{ clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%)' }}
             />
@@ -76,7 +79,7 @@ const Navbar = () => {
               className="text-white text-xl hidden xs:block"
               style={{ fontFamily: "'Big Shoulders Stencil', sans-serif", fontWeight: 700, letterSpacing: '0.15em' }}
             >
-              FERAL
+              F3RAL
             </span>
           </Link>
 
@@ -97,8 +100,17 @@ const Navbar = () => {
             ))}
           </div>
 
-          {/* Right: Cart + Mobile Toggle */}
+          {/* Right: Account + Cart + Mobile Toggle */}
           <div className="flex items-center gap-4">
+            <Link
+              to={currentUser ? '/account' : '/login'}
+              className="text-white hover:text-[#c81e1e] transition-colors hidden md:block"
+              aria-label={currentUser ? 'My account' : 'Sign in'}
+              title="My Account"
+            >
+              <FiUser size={20} />
+            </Link>
+
             <Link to="/cart" className="relative text-white hover:text-[#c81e1e] transition-colors">
               <FiShoppingBag size={22} />
               {itemCount > 0 && (
@@ -146,7 +158,7 @@ const Navbar = () => {
                   className="text-white text-xl"
                   style={{ fontFamily: "'Big Shoulders Stencil', sans-serif", fontWeight: 700, letterSpacing: '0.15em' }}
                 >
-                  FERAL
+                  F3RAL
                 </span>
                 <button
                   className="text-white hover:text-[#c81e1e] transition-colors"
@@ -181,7 +193,7 @@ const Navbar = () => {
                 ))}
               </nav>
 
-              <div className="mt-auto px-6 pb-8">
+              <div className="mt-auto px-6 pb-8 flex flex-col gap-4">
                 <Link
                   to="/cart"
                   onClick={() => setMobileOpen(false)}
@@ -189,6 +201,14 @@ const Navbar = () => {
                 >
                   <FiShoppingBag size={18} />
                   <span>Cart {itemCount > 0 && `(${itemCount})`}</span>
+                </Link>
+                <Link
+                  to={currentUser ? '/account' : '/login'}
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-3 text-white/60 hover:text-white transition-colors font-['Space_Grotesk'] text-sm"
+                >
+                  <FiUser size={18} />
+                  <span>{currentUser ? 'My Account' : 'Sign In'}</span>
                 </Link>
               </div>
             </motion.div>

@@ -1,14 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
-import { products } from '../data/products'
+import { useProducts } from '../hooks/useProducts'
 import ProductCard from '../components/ProductCard'
 import MarqueeBanner from '../components/MarqueeBanner'
 import ClawWatermark from '../components/ClawWatermark'
 import JaggedDivider from '../components/JaggedDivider'
 import GlitchText from '../components/GlitchText'
-
-const featuredProducts = products.filter((p) => p.featured)
+import SEOHead from '../components/SEOHead'
 
 // product1 = black/red, product2 = charcoal/silver
 const HERO_IMAGES = ['/product1.jpeg', '/product2.jpeg']
@@ -54,6 +53,17 @@ const HeroPanel = ({ side, src, variant }) => {
 
 const Home = () => {
   const shouldReduceMotion = useReducedMotion()
+  const { products } = useProducts()
+  // Always the 5 most-recently-uploaded products — not gated by the
+  // "Featured" flag, so this doesn't depend on how many products happen to
+  // be marked featured.
+  const featuredProducts = useMemo(
+    () =>
+      [...products]
+        .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
+        .slice(0, 5),
+    [products]
+  )
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [heroVariant, setHeroVariant] = useState(0)
@@ -83,6 +93,8 @@ const Home = () => {
   }
 
   return (
+    <>
+    <SEOHead path="/" />
     <div className="bg-[#0a0a0a]">
       {/* ── HERO ── */}
       <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
@@ -189,7 +201,7 @@ const Home = () => {
             transition={{ duration: 0.5, delay: 0.8 }}
             className="text-white/40 font-['Space_Grotesk'] text-sm md:text-base uppercase tracking-[0.3em] mt-4 mb-6 md:mt-8 md:mb-10"
           >
-            Technical streetwear. Unapologetically feral.
+            Technical streetwear. Unapologetically f3ral.
           </motion.p>
 
           <motion.div
@@ -271,7 +283,7 @@ const Home = () => {
             </div>
 
             {/* Desktop: grid */}
-            <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="hidden md:grid grid-cols-2 lg:grid-cols-5 gap-5">
               {featuredProducts.map((product, i) => (
                 <motion.div
                   key={product.id}
@@ -316,7 +328,7 @@ const Home = () => {
               >
                 <img
                   src="/logo2.jpeg"
-                  alt="FERAL brand mark"
+                  alt="F3RAL brand mark"
                   className="w-full max-w-sm mx-auto object-cover"
                   style={{ filter: 'contrast(1.2) brightness(0.9)' }}
                 />
@@ -425,6 +437,7 @@ const Home = () => {
         </div>
       </section>
     </div>
+    </>
   )
 }
 
