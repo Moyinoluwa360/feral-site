@@ -83,6 +83,7 @@ const Products = () => {
             <thead>
               <tr className="border-b border-white/10 text-white/40 font-['Space_Grotesk'] text-xs uppercase tracking-widest">
                 <th className="p-4 font-normal">Product</th>
+                <th className="p-4 font-normal">Colors</th>
                 <th className="p-4 font-normal">Price</th>
                 <th className="p-4 font-normal">Stock</th>
                 <th className="p-4 font-normal">Flags</th>
@@ -103,6 +104,27 @@ const Products = () => {
                         {product.name}
                       </span>
                     </div>
+                  </td>
+                  <td className="p-4">
+                    {product.colors?.length > 0 ? (
+                      <div className="flex items-center gap-1">
+                        {product.colors.slice(0, 6).map((color) => (
+                          <span
+                            key={color.name}
+                            title={color.name}
+                            className="w-3 h-3 rounded-full ring-1 ring-white/20 flex-shrink-0"
+                            style={{ backgroundColor: color.hex }}
+                          />
+                        ))}
+                        {product.colors.length > 6 && (
+                          <span className="text-white/30 font-['Space_Grotesk'] text-[10px]">
+                            +{product.colors.length - 6}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-white/20 font-['Space_Grotesk'] text-xs">—</span>
+                    )}
                   </td>
                   <td className="p-4 text-white/60 font-['Space_Grotesk'] text-sm">
                     {CURRENCY_SYMBOL}{Number(product.price ?? 0).toLocaleString()}

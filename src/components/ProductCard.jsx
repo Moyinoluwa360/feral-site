@@ -72,6 +72,24 @@ const ProductCard = ({ product }) => {
               {CURRENCY_SYMBOL}{product.price.toLocaleString()}
             </span>
           </div>
+
+          {product.colors?.length > 0 && (
+            <div className="flex items-center gap-1.5 mt-2">
+              {product.colors.slice(0, 5).map((color) => (
+                <span
+                  key={color.name}
+                  title={color.name}
+                  className="w-3.5 h-3.5 rounded-full ring-1 ring-white/20 flex-shrink-0"
+                  style={{ backgroundColor: color.hex }}
+                />
+              ))}
+              {product.colors.length > 5 && (
+                <span className="text-white/30 font-['Space_Grotesk'] text-[10px]">
+                  +{product.colors.length - 5}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </Link>
