@@ -24,6 +24,37 @@ const db = getFirestore()
 const paystackSecretKey = defineSecret('PAYSTACK_SECRET_KEY')
 const PAYSTACK_AMOUNT_MULTIPLIER = 100
 
+// Stock is keyed by size alone for single-color products, or "color|size"
+// for products with color variants.
+const stockKeyFor = (item) => (item.color ? `${item.color}|${item.size}` : item.size)
+
+const describeStockKey = (key) => {
+  const [color, size] = key.split('|')
+  return size ? `${color} / ${size}` : color
+}
+
+// Groups cart/order items by product, merging quantities per stock key.
+// Firestore transactions only allow ONE write per document, so if the same
+// product appears more than once (e.g. two different sizes or colors of the
+// same item), all of its stock changes must land in a single update() call.
+const groupByProduct = (items) => {
+  const byProduct = new Map()
+  for (const item of items) {
+    const productId = String(item.productId)
+    if (!byProduct.has(productId)) {
+      byProduct.set(productId, {
+        ref: db.collection('products').doc(productId),
+        name: item.name,
+        quantities: new Map(),
+      })
+    }
+    const key = stockKeyFor(item)
+    const entry = byProduct.get(productId)
+    entry.quantities.set(key, (entry.quantities.get(key) ?? 0) + item.quantity)
+  }
+  return [...byProduct.values()]
+}
+
 exports.verifyPayment = onCall({ secrets: [paystackSecretKey] }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'You must be signed in to complete checkout.')
@@ -68,29 +99,32 @@ exports.verifyPayment = onCall({ secrets: [paystackSecretKey] }, async (request)
   // ── Step 3: Firestore transaction — decrement stock + create order ────────
   try {
     const orderId = await db.runTransaction(async (transaction) => {
-      // Check and decrement stock for each cart item
-      for (const item of cartItems) {
-        const productRef = db.collection('products').doc(String(item.productId))
-        const productSnap = await transaction.get(productRef)
+      // Group cart items by product (merging quantities per stock key) so each
+      // product gets exactly one read and one write, regardless of how many
+      // different sizes/colors of it are in the cart.
+      const productEntries = groupByProduct(cartItems)
+      const productSnaps = await Promise.all(productEntries.map((e) => transaction.get(e.ref)))
 
-        if (!productSnap.exists) {
-          throw new Error(`Product "${item.name}" no longer exists`)
+      productEntries.forEach((entry, i) => {
+        const snap = productSnaps[i]
+        if (!snap.exists) {
+          throw new Error(`Product "${entry.name}" no longer exists`)
         }
 
-        const stock = productSnap.data().stock ?? {}
-        const available = stock[item.size] ?? 0
-
-        if (available < item.quantity) {
-          throw new Error(
-            `Insufficient stock for ${item.name} (${item.size}): ` +
-              `${available} available, ${item.quantity} requested`
-          )
+        const stock = snap.data().stock ?? {}
+        const updates = {}
+        for (const [key, qty] of entry.quantities) {
+          const available = stock[key] ?? 0
+          if (available < qty) {
+            throw new Error(
+              `Insufficient stock for ${entry.name} (${describeStockKey(key)}): ` +
+                `${available} available, ${qty} requested`
+            )
+          }
+          updates[`stock.${key}`] = FieldValue.increment(-qty)
         }
-
-        transaction.update(productRef, {
-          [`stock.${item.size}`]: FieldValue.increment(-item.quantity),
-        })
-      }
+        transaction.update(entry.ref, updates)
+      })
 
       // Create the order document
       const orderRef = db.collection('orders').doc()
@@ -180,20 +214,18 @@ exports.refundOrder = onCall({ secrets: [paystackSecretKey] }, async (request) =
   // ── Step 2: Firestore transaction — restore stock + mark refunded ─────────
   try {
     await db.runTransaction(async (transaction) => {
-      // Reads must happen before writes in a Firestore transaction.
-      const productRefs = (order.items ?? []).map((item) =>
-        db.collection('products').doc(String(item.productId))
-      )
-      const productSnaps = await Promise.all(
-        productRefs.map((ref) => transaction.get(ref))
-      )
+      // Same grouping as verifyPayment: one read + one write per product, even
+      // if the order has multiple sizes/colors of the same item.
+      const productEntries = groupByProduct(order.items ?? [])
+      const productSnaps = await Promise.all(productEntries.map((e) => transaction.get(e.ref)))
 
-      productSnaps.forEach((snap, i) => {
-        if (!snap.exists) return // product deleted since the order was placed — nothing to restore
-        const item = order.items[i]
-        transaction.update(productRefs[i], {
-          [`stock.${item.size}`]: FieldValue.increment(item.quantity),
-        })
+      productEntries.forEach((entry, i) => {
+        if (!productSnaps[i].exists) return // product deleted since the order was placed — nothing to restore
+        const updates = {}
+        for (const [key, qty] of entry.quantities) {
+          updates[`stock.${key}`] = FieldValue.increment(qty)
+        }
+        transaction.update(entry.ref, updates)
       })
 
       transaction.update(orderRef, {

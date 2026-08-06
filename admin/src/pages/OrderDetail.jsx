@@ -177,7 +177,7 @@ const OrderDetail = () => {
               <div className="flex-1 min-w-0">
                 <p className="text-white font-['Space_Grotesk'] text-sm truncate">{item.name}</p>
                 <p className="text-white/40 font-['Space_Grotesk'] text-xs">
-                  {item.size} × {item.quantity}
+                  {item.color ? `${item.color}, ` : ''}{item.size} × {item.quantity}
                 </p>
               </div>
               <p className="text-white/60 font-['Space_Grotesk'] text-sm">

@@ -19,6 +19,7 @@ const ProductDetail = () => {
 
   const [mainImage, setMainImage] = useState(0)
   const [selectedSize, setSelectedSize] = useState(null)
+  const [selectedColor, setSelectedColor] = useState(null)
   const [quantity, setQuantity] = useState(1)
   const [activeTab, setActiveTab] = useState('description')
   const [addedToCart, setAddedToCart] = useState(false)
@@ -59,13 +60,23 @@ const ProductDetail = () => {
     )
   }
 
-  // Check available stock for the selected size
-  const stockForSize = selectedSize ? (product.stock?.[selectedSize] ?? 0) : null
+  const hasColors = product.colors?.length > 0
+
+  // Check available stock for the selected size (+ color, if this product has them)
+  const canCheckStock = selectedSize && (!hasColors || selectedColor)
+  const stockKey = canCheckStock ? (hasColors ? `${selectedColor.name}|${selectedSize}` : selectedSize) : null
+  const stockForSize = stockKey ? (product.stock?.[stockKey] ?? 0) : null
   const outOfStock = stockForSize !== null && stockForSize === 0
 
+  const handleSelectColor = (color) => {
+    setSelectedColor(color)
+    const imgIndex = product.images.indexOf(color.image)
+    if (imgIndex >= 0) setMainImage(imgIndex)
+  }
+
   const handleAddToCart = () => {
-    if (!selectedSize || outOfStock) return
-    addItem(product, selectedSize, quantity)
+    if (!selectedSize || (hasColors && !selectedColor) || outOfStock) return
+    addItem(product, selectedSize, quantity, hasColors ? selectedColor.name : null)
     setAddedToCart(true)
     setTimeout(() => setAddedToCart(false), 2000)
   }
@@ -155,6 +166,36 @@ const ProductDetail = () => {
               {CURRENCY_SYMBOL}{product.price.toLocaleString()}
             </p>
 
+            {/* Color Selector */}
+            {hasColors && (
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-white/60 font-['Space_Grotesk'] text-xs uppercase tracking-widest">
+                    Color{selectedColor ? `: ${selectedColor.name}` : ''}
+                  </span>
+                  {!selectedColor && (
+                    <span className="text-[#c81e1e] font-['Space_Grotesk'] text-xs">Required</span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  {product.colors.map((color) => (
+                    <button
+                      key={color.name}
+                      type="button"
+                      onClick={() => handleSelectColor(color)}
+                      title={color.name}
+                      className={`w-9 h-9 rounded-full transition-all duration-150 ${
+                        selectedColor?.name === color.name
+                          ? 'ring-2 ring-[#c81e1e] ring-offset-2 ring-offset-[#0a0a0a]'
+                          : 'ring-1 ring-white/20 hover:ring-white/50'
+                      }`}
+                      style={{ backgroundColor: color.hex }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Size Selector */}
             <div className="mb-8">
               <div className="flex items-center justify-between mb-3">
@@ -169,7 +210,10 @@ const ProductDetail = () => {
               </div>
               <div className="flex flex-wrap gap-2">
                 {product.sizes.map((size) => {
-                  const sizeStock = product.stock?.[size] ?? null
+                  const sizeStockKey = hasColors
+                    ? (selectedColor ? `${selectedColor.name}|${size}` : null)
+                    : size
+                  const sizeStock = sizeStockKey ? (product.stock?.[sizeStockKey] ?? 0) : null
                   const soldOut = sizeStock !== null && sizeStock === 0
                   return (
                     <button
@@ -224,14 +268,14 @@ const ProductDetail = () => {
             {/* Add to Cart */}
             <button
               onClick={handleAddToCart}
-              disabled={!selectedSize || outOfStock}
+              disabled={!selectedSize || (hasColors && !selectedColor) || outOfStock}
               className={`w-full py-4 font-['Big_Shoulders_Stencil'] font-bold text-base uppercase tracking-[0.25em] transition-all duration-200 mb-4 ${
-                !selectedSize || outOfStock
+                !selectedSize || (hasColors && !selectedColor) || outOfStock
                   ? 'bg-white/10 text-white/30 cursor-not-allowed'
                   : 'btn-primary w-full'
               }`}
               style={
-                selectedSize && !outOfStock
+                selectedSize && (!hasColors || selectedColor) && !outOfStock
                   ? { clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))' }
                   : {}
               }
@@ -261,9 +305,9 @@ const ProductDetail = () => {
               </AnimatePresence>
             </button>
 
-            {!selectedSize && (
+            {(!selectedSize || (hasColors && !selectedColor)) && (
               <p className="text-white/30 font-['Space_Grotesk'] text-xs text-center mb-4">
-                Please select a size to continue
+                Please select a {hasColors && !selectedColor ? 'color' : 'size'} to continue
               </p>
             )}
 

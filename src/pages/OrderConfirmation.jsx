@@ -231,7 +231,7 @@ const OrderConfirmation = () => {
                         {item.name}
                       </p>
                       <p className="text-white/40 font-['Space_Grotesk'] text-xs mt-1">
-                        Size: {item.size} · Qty: {item.quantity}
+                        {item.color ? `Color: ${item.color} · ` : ''}Size: {item.size} · Qty: {item.quantity}
                       </p>
                     </div>
                     <p className="text-white font-['Space_Grotesk'] text-sm font-semibold">

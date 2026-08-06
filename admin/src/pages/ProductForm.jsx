@@ -9,7 +9,11 @@ const SIZE_OPTIONS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '28', '30', '32', '34', 
 const EMPTY_FORM = {
   name: '',
   price: '',
+  colors: [], // { name, hex, image } — image is a URL, or "newFile:<index>" until upload resolves it
   sizes: [],
+  // Stock grid keyed by colorIndex|size (e.g. "0|M"), or plain size when there
+  // are no colors. Indexed rather than keyed by color name so renaming/removing
+  // a color mid-edit doesn't silently lose already-entered stock numbers.
   stock: {},
   description: '',
   materials: '',
@@ -18,12 +22,25 @@ const EMPTY_FORM = {
   isNew: false,
 }
 
+const gridKey = (colorIdx, size) => (colorIdx === null || colorIdx === undefined ? size : `${colorIdx}|${size}`)
+
+// Recomputes the full set of stock grid keys for the current colors/sizes,
+// preserving any values that already exist for keys that still apply.
+const rebuildStock = (colors, sizes, prevStock) => {
+  const keys =
+    colors.length > 0
+      ? colors.flatMap((_, idx) => sizes.map((s) => gridKey(idx, s)))
+      : sizes.map((s) => gridKey(null, s))
+  return Object.fromEntries(keys.map((k) => [k, prevStock[k] ?? 0]))
+}
+
 const ProductForm = () => {
   const { id } = useParams()
   const isEditing = Boolean(id)
   const navigate = useNavigate()
 
   const [form, setForm] = useState(EMPTY_FORM)
+  const [customSize, setCustomSize] = useState('')
   const [newFiles, setNewFiles] = useState([])
   const [removedImageUrls, setRemovedImageUrls] = useState([])
   const [loading, setLoading] = useState(isEditing)
@@ -40,11 +57,31 @@ const ProductForm = () => {
         return
       }
       const data = snap.data()
+      const colors = data.colors ?? []
+      const sizes = data.sizes ?? []
+      const savedStock = data.stock ?? {}
+
+      // Saved stock is keyed by color NAME; the form's grid is keyed by
+      // color INDEX — convert on the way in.
+      const stock = {}
+      if (colors.length > 0) {
+        colors.forEach((c, idx) => {
+          sizes.forEach((s) => {
+            stock[gridKey(idx, s)] = savedStock[`${c.name}|${s}`] ?? 0
+          })
+        })
+      } else {
+        sizes.forEach((s) => {
+          stock[s] = savedStock[s] ?? 0
+        })
+      }
+
       setForm({
         name: data.name ?? '',
         price: data.price ?? '',
-        sizes: data.sizes ?? [],
-        stock: data.stock ?? {},
+        colors,
+        sizes,
+        stock,
         description: data.description ?? '',
         materials: data.materials ?? '',
         images: data.images ?? [],
@@ -60,22 +97,64 @@ const ProductForm = () => {
     setForm((f) => {
       const selected = f.sizes.includes(size)
       const sizes = selected ? f.sizes.filter((s) => s !== size) : [...f.sizes, size]
-      const stock = { ...f.stock }
-      if (selected) {
-        delete stock[size]
-      } else {
-        stock[size] = stock[size] ?? 0
-      }
-      return { ...f, sizes, stock }
+      return { ...f, sizes, stock: rebuildStock(f.colors, sizes, f.stock) }
     })
   }
 
-  const handleStockChange = (size, value) => {
-    setForm((f) => ({ ...f, stock: { ...f.stock, [size]: Number(value) || 0 } }))
+  const handleAddCustomSize = () => {
+    const size = customSize.trim()
+    if (!size) return
+    setForm((f) => {
+      if (f.sizes.includes(size)) return f
+      const sizes = [...f.sizes, size]
+      return { ...f, sizes, stock: rebuildStock(f.colors, sizes, f.stock) }
+    })
+    setCustomSize('')
+  }
+
+  const handleStockChange = (colorIdx, size, value) => {
+    setForm((f) => ({ ...f, stock: { ...f.stock, [gridKey(colorIdx, size)]: Number(value) || 0 } }))
+  }
+
+  const handleAddColor = () => {
+    setForm((f) => {
+      const colors = [...f.colors, { name: '', hex: '#c81e1e', image: f.images[0] ?? '' }]
+      return { ...f, colors, stock: rebuildStock(colors, f.sizes, f.stock) }
+    })
+  }
+
+  const handleColorFieldChange = (idx, field, value) => {
+    setForm((f) => {
+      const colors = [...f.colors]
+      colors[idx] = { ...colors[idx], [field]: value }
+      return { ...f, colors }
+    })
+  }
+
+  const handleRemoveColor = (removeIdx) => {
+    setForm((f) => {
+      const colors = f.colors.filter((_, i) => i !== removeIdx)
+      // Re-index the stock grid: old index -> new index, dropping the removed color.
+      const stock = {}
+      let newIdx = 0
+      f.colors.forEach((c, oldIdx) => {
+        if (oldIdx === removeIdx) return
+        f.sizes.forEach((s) => {
+          stock[gridKey(newIdx, s)] = f.stock[gridKey(oldIdx, s)] ?? 0
+        })
+        newIdx++
+      })
+      return { ...f, colors, stock }
+    })
   }
 
   const handleRemoveExistingImage = (url) => {
-    setForm((f) => ({ ...f, images: f.images.filter((u) => u !== url) }))
+    setForm((f) => ({
+      ...f,
+      images: f.images.filter((u) => u !== url),
+      // Clear any color that was pointing at the image we just removed.
+      colors: f.colors.map((c) => (c.image === url ? { ...c, image: '' } : c)),
+    }))
     setRemovedImageUrls((prev) => [...prev, url])
   }
 
@@ -102,6 +181,10 @@ const ProductForm = () => {
 
     if (!form.name.trim() || !form.price) {
       setError('Name and price are required.')
+      return
+    }
+    if (form.colors.some((c) => !c.name.trim())) {
+      setError('Every color needs a name.')
       return
     }
 
@@ -134,11 +217,40 @@ const ProductForm = () => {
         })
       )
 
+      // A color's image may point at a not-yet-uploaded file (marked
+      // "newFile:<index>") — resolve those to real URLs now that upload's done.
+      const resolveImage = (img) => {
+        if (typeof img === 'string' && img.startsWith('newFile:')) {
+          return uploadedUrls[Number(img.split(':')[1])] ?? ''
+        }
+        return img ?? ''
+      }
+      const colors = form.colors.map((c) => ({
+        name: c.name.trim(),
+        hex: c.hex,
+        image: resolveImage(c.image),
+      }))
+
+      // Convert the index-keyed grid back into the name-keyed map Firestore stores.
+      const stock = {}
+      if (colors.length > 0) {
+        colors.forEach((c, idx) => {
+          form.sizes.forEach((s) => {
+            stock[`${c.name}|${s}`] = form.stock[gridKey(idx, s)] ?? 0
+          })
+        })
+      } else {
+        form.sizes.forEach((s) => {
+          stock[s] = form.stock[gridKey(null, s)] ?? 0
+        })
+      }
+
       const payload = {
         name: form.name.trim(),
         price: Number(form.price),
+        colors,
         sizes: form.sizes,
-        stock: form.stock,
+        stock,
         description: form.description,
         materials: form.materials,
         images: [...form.images, ...uploadedUrls],
@@ -165,6 +277,13 @@ const ProductForm = () => {
   if (loading) {
     return <p className="text-white/40 font-['Space_Grotesk'] text-sm">Loading…</p>
   }
+
+  // All pickable images for the color-image chooser: existing uploaded URLs
+  // plus not-yet-uploaded new files (referenced by "newFile:<index>" until saved).
+  const pickableImages = [
+    ...form.images.map((url) => ({ key: url, src: url })),
+    ...newFiles.map((f, i) => ({ key: `newFile:${i}`, src: f.previewUrl })),
+  ]
 
   return (
     <div className="max-w-2xl">
@@ -218,7 +337,7 @@ const ProductForm = () => {
           <label className="block text-white/50 font-['Space_Grotesk'] text-xs uppercase tracking-widest mb-2">
             Sizes
           </label>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 mb-3">
             {SIZE_OPTIONS.map((size) => (
               <button
                 key={size}
@@ -233,28 +352,170 @@ const ProductForm = () => {
                 {size}
               </button>
             ))}
+            {form.sizes
+              .filter((s) => !SIZE_OPTIONS.includes(s))
+              .map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  onClick={() => handleToggleSize(size)}
+                  className="min-w-[48px] px-3 py-2 font-['Space_Grotesk'] text-sm bg-[#c81e1e] text-white"
+                >
+                  {size}
+                </button>
+              ))}
           </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              className="input-dark max-w-[160px]"
+              placeholder='Custom, e.g. "30x32"'
+              value={customSize}
+              onChange={(e) => setCustomSize(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  handleAddCustomSize()
+                }
+              }}
+            />
+            <button type="button" onClick={handleAddCustomSize} className="btn-outline px-4">
+              Add
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-white/50 font-['Space_Grotesk'] text-xs uppercase tracking-widest">
+              Colors
+            </label>
+            <button type="button" onClick={handleAddColor} className="text-[#c81e1e] font-['Space_Grotesk'] text-xs uppercase tracking-widest hover:underline">
+              + Add Color
+            </button>
+          </div>
+
+          {form.colors.length === 0 ? (
+            <p className="text-white/30 font-['Space_Grotesk'] text-xs">
+              No colors added — this product will be treated as single-color, with stock tracked by size only.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {form.colors.map((color, idx) => (
+                <div key={idx} className="border border-white/10 p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <input
+                      type="color"
+                      value={color.hex}
+                      onChange={(e) => handleColorFieldChange(idx, 'hex', e.target.value)}
+                      className="w-9 h-9 bg-transparent border border-white/15 cursor-pointer flex-shrink-0"
+                    />
+                    <input
+                      type="text"
+                      className="input-dark flex-1"
+                      placeholder="Color name, e.g. Black"
+                      value={color.name}
+                      onChange={(e) => handleColorFieldChange(idx, 'name', e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveColor(idx)}
+                      className="text-white/40 hover:text-[#c81e1e] font-['Space_Grotesk'] text-xs uppercase tracking-widest flex-shrink-0"
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  {pickableImages.length > 0 && (
+                    <>
+                      <span className="block text-white/40 font-['Space_Grotesk'] text-xs mb-2">
+                        Representative image
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {pickableImages.map((img) => (
+                          <button
+                            key={img.key}
+                            type="button"
+                            onClick={() => handleColorFieldChange(idx, 'image', img.key)}
+                            className={`w-14 h-16 overflow-hidden flex-shrink-0 transition-all ${
+                              color.image === img.key
+                                ? 'ring-2 ring-[#c81e1e]'
+                                : 'ring-1 ring-white/10 opacity-60 hover:opacity-100'
+                            }`}
+                          >
+                            <img src={img.src} alt="" className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {form.sizes.length > 0 && (
           <div>
             <label className="block text-white/50 font-['Space_Grotesk'] text-xs uppercase tracking-widest mb-2">
-              Stock per size
+              Stock {form.colors.length > 0 ? 'per color / size' : 'per size'}
             </label>
-            <div className="grid grid-cols-4 gap-3">
-              {form.sizes.map((size) => (
-                <div key={size}>
-                  <span className="block text-white/40 font-['Space_Grotesk'] text-xs mb-1">{size}</span>
-                  <input
-                    type="number"
-                    min="0"
-                    className="input-dark"
-                    value={form.stock[size] ?? 0}
-                    onChange={(e) => handleStockChange(size, e.target.value)}
-                  />
-                </div>
-              ))}
-            </div>
+
+            {form.colors.length === 0 ? (
+              <div className="grid grid-cols-4 gap-3">
+                {form.sizes.map((size) => (
+                  <div key={size}>
+                    <span className="block text-white/40 font-['Space_Grotesk'] text-xs mb-1">{size}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      className="input-dark"
+                      value={form.stock[gridKey(null, size)] ?? 0}
+                      onChange={(e) => handleStockChange(null, size, e.target.value)}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="text-left pr-4 pb-2 text-white/40 font-['Space_Grotesk'] text-xs uppercase">Color</th>
+                      {form.sizes.map((size) => (
+                        <th key={size} className="px-2 pb-2 text-white/40 font-['Space_Grotesk'] text-xs uppercase">
+                          {size}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {form.colors.map((color, idx) => (
+                      <tr key={idx}>
+                        <td className="pr-4 py-1 text-white font-['Space_Grotesk'] text-sm whitespace-nowrap">
+                          <span
+                            className="inline-block w-3 h-3 mr-2 align-middle border border-white/20"
+                            style={{ backgroundColor: color.hex }}
+                          />
+                          {color.name || '—'}
+                        </td>
+                        {form.sizes.map((size) => (
+                          <td key={size} className="px-2 py-1">
+                            <input
+                              type="number"
+                              min="0"
+                              className="input-dark w-20"
+                              value={form.stock[gridKey(idx, size)] ?? 0}
+                              onChange={(e) => handleStockChange(idx, size, e.target.value)}
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 

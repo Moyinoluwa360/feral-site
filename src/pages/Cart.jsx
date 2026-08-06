@@ -72,7 +72,7 @@ const Cart = () => {
               <AnimatePresence>
                 {items.map((item) => (
                   <motion.div
-                    key={`${item.product.id}-${item.size}`}
+                    key={`${item.product.id}-${item.size}-${item.color ?? ''}`}
                     initial={{ opacity: 0, x: shouldReduceMotion ? 0 : -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: shouldReduceMotion ? 0 : -40, height: 0 }}
@@ -102,7 +102,7 @@ const Cart = () => {
                         </h3>
                       </Link>
                       <p className="text-white/40 font-['Space_Grotesk'] text-xs mt-1 capitalize">
-                        Size: {item.size}
+                        {item.color ? `${item.color} · ` : ''}Size: {item.size}
                       </p>
                       <p className="text-white font-['Space_Grotesk'] text-sm font-semibold mt-2">
                         {CURRENCY_SYMBOL}{(item.product.price * item.quantity).toLocaleString()}
@@ -112,7 +112,7 @@ const Cart = () => {
                     {/* Controls */}
                     <div className="flex flex-col items-end justify-between">
                       <button
-                        onClick={() => removeItem(item.product.id, item.size)}
+                        onClick={() => removeItem(item.product.id, item.size, item.color)}
                         className="text-white/30 hover:text-[#c81e1e] transition-colors p-1"
                         aria-label={`Remove ${item.product.name}`}
                       >
@@ -121,7 +121,7 @@ const Cart = () => {
 
                       <div className="flex items-center border border-white/15">
                         <button
-                          onClick={() => updateQuantity(item.product.id, item.size, item.quantity - 1)}
+                          onClick={() => updateQuantity(item.product.id, item.size, item.quantity - 1, item.color)}
                           className="w-8 h-8 flex items-center justify-center text-white/50 hover:text-white hover:bg-white/5 transition-colors"
                         >
                           <FiMinus size={12} />
@@ -130,7 +130,7 @@ const Cart = () => {
                           {item.quantity}
                         </span>
                         <button
-                          onClick={() => updateQuantity(item.product.id, item.size, item.quantity + 1)}
+                          onClick={() => updateQuantity(item.product.id, item.size, item.quantity + 1, item.color)}
                           className="w-8 h-8 flex items-center justify-center text-white/50 hover:text-white hover:bg-white/5 transition-colors"
                         >
                           <FiPlus size={12} />
@@ -157,9 +157,9 @@ const Cart = () => {
 
                 <div className="flex flex-col gap-3 mb-6">
                   {items.map((item) => (
-                    <div key={`${item.product.id}-${item.size}`} className="flex justify-between">
+                    <div key={`${item.product.id}-${item.size}-${item.color ?? ''}`} className="flex justify-between">
                       <span className="text-white/40 font-['Space_Grotesk'] text-xs">
-                        {item.product.name} ({item.size}) ×{item.quantity}
+                        {item.product.name} ({item.color ? `${item.color}, ` : ''}{item.size}) ×{item.quantity}
                       </span>
                       <span className="text-white/60 font-['Space_Grotesk'] text-xs">
                         {CURRENCY_SYMBOL}{(item.product.price * item.quantity).toLocaleString()}

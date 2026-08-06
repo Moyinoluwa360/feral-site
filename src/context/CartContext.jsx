@@ -17,10 +17,12 @@ const cartReducer = (state, action) => {
       return action.payload
 
     case 'ADD_ITEM': {
-      const { product, size, quantity } = action.payload
+      const { product, size, color, quantity } = action.payload
       const existingIndex = state.findIndex(
         (item) =>
-          String(item.product.id) === String(product.id) && item.size === size
+          String(item.product.id) === String(product.id) &&
+          item.size === size &&
+          (item.color ?? null) === (color ?? null)
       )
       if (existingIndex >= 0) {
         const updated = [...state]
@@ -30,30 +32,32 @@ const cartReducer = (state, action) => {
         }
         return updated
       }
-      return [...state, { product, size, quantity }]
+      return [...state, { product, size, color: color ?? null, quantity }]
     }
 
     case 'REMOVE_ITEM': {
-      const { productId, size } = action.payload
+      const { productId, size, color } = action.payload
       return state.filter(
         (item) =>
-          !(String(item.product.id) === String(productId) && item.size === size)
+          !(
+            String(item.product.id) === String(productId) &&
+            item.size === size &&
+            (item.color ?? null) === (color ?? null)
+          )
       )
     }
 
     case 'UPDATE_QUANTITY': {
-      const { productId, size, quantity } = action.payload
+      const { productId, size, color, quantity } = action.payload
+      const matches = (item) =>
+        String(item.product.id) === String(productId) &&
+        item.size === size &&
+        (item.color ?? null) === (color ?? null)
+
       if (quantity <= 0) {
-        return state.filter(
-          (item) =>
-            !(String(item.product.id) === String(productId) && item.size === size)
-        )
+        return state.filter((item) => !matches(item))
       }
-      return state.map((item) =>
-        String(item.product.id) === String(productId) && item.size === size
-          ? { ...item, quantity }
-          : item
-      )
+      return state.map((item) => (matches(item) ? { ...item, quantity } : item))
     }
 
     case 'CLEAR_CART':
@@ -72,7 +76,8 @@ function mergeGuestCart(firestoreCart, guestCart) {
     const idx = merged.findIndex(
       (item) =>
         String(item.product.id) === String(guestItem.product.id) &&
-        item.size === guestItem.size
+        item.size === guestItem.size &&
+        (item.color ?? null) === (guestItem.color ?? null)
     )
     if (idx >= 0) {
       merged[idx] = { ...merged[idx], quantity: merged[idx].quantity + guestItem.quantity }
@@ -159,8 +164,8 @@ export const CartProvider = ({ children }) => {
   // then syncs to the appropriate store — avoiding effect timing issues.
 
   const addItem = useCallback(
-    (product, size, quantity = 1) => {
-      const action = { type: 'ADD_ITEM', payload: { product, size, quantity } }
+    (product, size, quantity = 1, color = null) => {
+      const action = { type: 'ADD_ITEM', payload: { product, size, color, quantity } }
       const newItems = cartReducer(items, action)
       dispatch(action)
       syncToStorage(newItems)
@@ -169,8 +174,8 @@ export const CartProvider = ({ children }) => {
   )
 
   const removeItem = useCallback(
-    (productId, size) => {
-      const action = { type: 'REMOVE_ITEM', payload: { productId, size } }
+    (productId, size, color = null) => {
+      const action = { type: 'REMOVE_ITEM', payload: { productId, size, color } }
       const newItems = cartReducer(items, action)
       dispatch(action)
       syncToStorage(newItems)
@@ -179,8 +184,8 @@ export const CartProvider = ({ children }) => {
   )
 
   const updateQuantity = useCallback(
-    (productId, size, quantity) => {
-      const action = { type: 'UPDATE_QUANTITY', payload: { productId, size, quantity } }
+    (productId, size, quantity, color = null) => {
+      const action = { type: 'UPDATE_QUANTITY', payload: { productId, size, color, quantity } }
       const newItems = cartReducer(items, action)
       dispatch(action)
       syncToStorage(newItems)

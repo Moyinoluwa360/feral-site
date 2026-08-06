@@ -100,10 +100,11 @@ const Checkout = () => {
           continue
         }
         const stock = snap.data().stock ?? {}
-        const available = stock[item.size] ?? 0
+        const stockKey = item.color ? `${item.color}|${item.size}` : item.size
+        const available = stock[stockKey] ?? 0
         if (available < item.quantity) {
           errors.push(
-            `${item.product.name} (${item.size}): only ${available} in stock.`
+            `${item.product.name} (${item.color ? `${item.color}, ` : ''}${item.size}): only ${available} in stock.`
           )
         }
       } catch {
@@ -126,6 +127,7 @@ const Checkout = () => {
           price: item.product.price,
           image: item.product.images?.[0] ?? '',
           size: item.size,
+          color: item.color ?? null,
           quantity: item.quantity,
         })),
         shippingDetails: form,
@@ -425,7 +427,7 @@ const Checkout = () => {
                   <div className="flex flex-col gap-3 mb-6">
                     {items.map((item) => (
                       <div
-                        key={`${item.product.id}-${item.size}`}
+                        key={`${item.product.id}-${item.size}-${item.color ?? ''}`}
                         className="flex items-start gap-3"
                       >
                         <img
@@ -442,7 +444,7 @@ const Checkout = () => {
                             {item.product.name}
                           </p>
                           <p className="text-white/40 font-['Space_Grotesk'] text-xs">
-                            {item.size} × {item.quantity}
+                            {item.color ? `${item.color}, ` : ''}{item.size} × {item.quantity}
                           </p>
                         </div>
                         <p className="text-white/70 font-['Space_Grotesk'] text-xs flex-shrink-0">
