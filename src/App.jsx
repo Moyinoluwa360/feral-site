@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import { HelmetProvider } from 'react-helmet-async'
@@ -27,6 +28,12 @@ import NotFound from './pages/NotFound'
 
 const AppRoutes = () => {
   const location = useLocation()
+
+  // React Router doesn't reset scroll position on navigation — without this,
+  // a new page can open wherever the previous page happened to be scrolled to.
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [location.pathname])
 
   return (
     <AnimatePresence mode="wait">

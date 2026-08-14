@@ -47,7 +47,7 @@ const INITIAL_FORM = {
   address: '',
   city: '',
   state: '',
-  region: SHIPPING_REGIONS[0] ?? '',
+  region: '',
 }
 
 const Checkout = () => {
@@ -397,6 +397,9 @@ const Checkout = () => {
                         className="input-dark appearance-none pr-10 cursor-pointer"
                         required
                       >
+                        <option value="" disabled className="bg-[#0a0a0a]">
+                          Please select a region
+                        </option>
                         {SHIPPING_REGIONS.map((r) => (
                           <option key={r} value={r} className="bg-[#0a0a0a]">
                             {r}
@@ -463,10 +466,14 @@ const Checkout = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-white/40 font-['Space_Grotesk'] text-xs">
-                        Shipping ({form.region})
+                        Shipping{form.region ? ` (${form.region})` : ''}
                       </span>
                       <span className="text-white/60 font-['Space_Grotesk'] text-xs">
-                        {shipping === 0 ? 'FREE' : `${CURRENCY_SYMBOL}${shipping.toLocaleString()}`}
+                        {!form.region
+                          ? 'Select a region'
+                          : shipping === 0
+                          ? 'FREE'
+                          : `${CURRENCY_SYMBOL}${shipping.toLocaleString()}`}
                       </span>
                     </div>
                     <div className="flex justify-between mt-2 pt-3 border-t border-white/10">

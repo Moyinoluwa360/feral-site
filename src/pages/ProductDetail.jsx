@@ -8,6 +8,7 @@ import ProductCard from '../components/ProductCard'
 import GlitchText from '../components/GlitchText'
 import SEOHead from '../components/SEOHead'
 import { CURRENCY_SYMBOL } from '../lib/shipping'
+import { getTotalStock } from '../lib/stock'
 
 const ProductDetail = () => {
   const { id } = useParams()
@@ -61,6 +62,7 @@ const ProductDetail = () => {
   }
 
   const hasColors = product.colors?.length > 0
+  const productSoldOut = getTotalStock(product) <= 0
 
   // Check available stock for the selected size (+ color, if this product has them)
   const canCheckStock = selectedSize && (!hasColors || selectedColor)
@@ -162,9 +164,19 @@ const ProductDetail = () => {
               {product.name}
             </GlitchText>
 
-            <p className="text-white font-['Space_Grotesk'] text-3xl font-semibold mb-8">
-              {CURRENCY_SYMBOL}{product.price.toLocaleString()}
-            </p>
+            <div className="flex items-center gap-3 mb-8">
+              <p className="text-white font-['Space_Grotesk'] text-3xl font-semibold">
+                {CURRENCY_SYMBOL}{product.price.toLocaleString()}
+              </p>
+              {productSoldOut && (
+                <span
+                  className="bg-black/60 text-white/70 text-xs px-3 py-1 uppercase tracking-widest border border-white/20"
+                  style={{ fontFamily: "'Big Shoulders Stencil', sans-serif", fontWeight: 700 }}
+                >
+                  Sold Out
+                </span>
+              )}
+            </div>
 
             {/* Color Selector */}
             {hasColors && (
@@ -268,44 +280,48 @@ const ProductDetail = () => {
             {/* Add to Cart */}
             <button
               onClick={handleAddToCart}
-              disabled={!selectedSize || (hasColors && !selectedColor) || outOfStock}
+              disabled={productSoldOut || !selectedSize || (hasColors && !selectedColor) || outOfStock}
               className={`w-full py-4 font-['Big_Shoulders_Stencil'] font-bold text-base uppercase tracking-[0.25em] transition-all duration-200 mb-4 ${
-                !selectedSize || (hasColors && !selectedColor) || outOfStock
+                productSoldOut || !selectedSize || (hasColors && !selectedColor) || outOfStock
                   ? 'bg-white/10 text-white/30 cursor-not-allowed'
                   : 'btn-primary w-full'
               }`}
               style={
-                selectedSize && (!hasColors || selectedColor) && !outOfStock
+                !productSoldOut && selectedSize && (!hasColors || selectedColor) && !outOfStock
                   ? { clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))' }
                   : {}
               }
             >
-              <AnimatePresence mode="wait">
-                {addedToCart ? (
-                  <motion.span
-                    key="added"
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                    className="flex items-center justify-center gap-2"
-                  >
-                    <FiCheck size={16} />
-                    ADDED TO CART
-                  </motion.span>
-                ) : (
-                  <motion.span
-                    key="add"
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                  >
-                    ADD TO CART
-                  </motion.span>
-                )}
-              </AnimatePresence>
+              {productSoldOut ? (
+                'SOLD OUT'
+              ) : (
+                <AnimatePresence mode="wait">
+                  {addedToCart ? (
+                    <motion.span
+                      key="added"
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className="flex items-center justify-center gap-2"
+                    >
+                      <FiCheck size={16} />
+                      ADDED TO CART
+                    </motion.span>
+                  ) : (
+                    <motion.span
+                      key="add"
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                    >
+                      ADD TO CART
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              )}
             </button>
 
-            {(!selectedSize || (hasColors && !selectedColor)) && (
+            {!productSoldOut && (!selectedSize || (hasColors && !selectedColor)) && (
               <p className="text-white/30 font-['Space_Grotesk'] text-xs text-center mb-4">
                 Please select a {hasColors && !selectedColor ? 'color' : 'size'} to continue
               </p>

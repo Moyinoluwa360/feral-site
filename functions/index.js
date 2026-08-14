@@ -55,6 +55,21 @@ const groupByProduct = (items) => {
   return [...byProduct.values()]
 }
 
+// Refunds a Paystack transaction by reference. Used both when an admin
+// refunds a completed order and when verifyPayment must undo a charge whose
+// order was never created (e.g. a stock check failed after payment cleared).
+const refundPaystackTransaction = async (reference, secretKey) => {
+  const res = await fetch('https://api.paystack.co/refund', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${secretKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ transaction: reference }),
+  })
+  return res.json()
+}
+
 exports.verifyPayment = onCall({ secrets: [paystackSecretKey] }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'You must be signed in to complete checkout.')
@@ -153,7 +168,28 @@ exports.verifyPayment = onCall({ secrets: [paystackSecretKey] }, async (request)
     return { orderId }
   } catch (err) {
     console.error('[verifyPayment] Transaction failed:', err.message)
-    throw new HttpsError('internal', err.message || 'Order creation failed')
+
+    // Paystack already captured this payment but no order was created —
+    // refund automatically so the customer isn't charged for nothing.
+    let refundData
+    try {
+      refundData = await refundPaystackTransaction(reference, paystackSecretKey.value())
+    } catch (refundErr) {
+      console.error('[verifyPayment] Auto-refund request failed:', refundErr)
+    }
+
+    if (refundData?.status) {
+      throw new HttpsError(
+        'internal',
+        `${err.message} Your payment has been automatically refunded and should reflect within a few business days.`
+      )
+    }
+
+    console.error('[verifyPayment] Auto-refund failed:', refundData?.message)
+    throw new HttpsError(
+      'internal',
+      `${err.message} We could NOT automatically refund your payment — please contact support with reference ${reference}.`
+    )
   }
 })
 
@@ -192,15 +228,7 @@ exports.refundOrder = onCall({ secrets: [paystackSecretKey] }, async (request) =
   // ── Step 1: Refund via Paystack ───────────────────────────────────────────
   let paystackData
   try {
-    const paystackRes = await fetch('https://api.paystack.co/refund', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${paystackSecretKey.value()}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ transaction: order.reference }),
-    })
-    paystackData = await paystackRes.json()
+    paystackData = await refundPaystackTransaction(order.reference, paystackSecretKey.value())
   } catch (err) {
     console.error('[refundOrder] Paystack request failed:', err)
     throw new HttpsError('unavailable', 'Could not reach payment provider')

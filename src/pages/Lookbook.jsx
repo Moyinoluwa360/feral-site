@@ -2,80 +2,35 @@ import { motion, useReducedMotion } from 'framer-motion'
 import GlitchText from '../components/GlitchText'
 import ClawWatermark from '../components/ClawWatermark'
 
-const LOOKBOOK_IMAGES = [
-  {
-    url: 'https://images.unsplash.com/photo-1552374196-c4e7ffc6e126?w=800&q=80',
-    alt: 'Editorial 01',
-    span: 'full',
-    caption: 'SEASON 01 — APEX',
-  },
-  {
-    url: 'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=800&q=80',
-    alt: 'Editorial 02',
-    span: 'half',
-    caption: 'UNTAMED / OUTERWEAR',
-  },
-  {
-    url: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80',
-    alt: 'Editorial 03',
-    span: 'half',
-    caption: 'TECHNICAL SERIES',
-  },
-  {
-    url: 'https://images.unsplash.com/photo-1550614000-4895a10e1bfd?w=800&q=80',
-    alt: 'Editorial 04',
-    span: 'half',
-    caption: 'BUILT IN THE DARK',
-  },
-  {
-    url: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&q=80',
-    alt: 'Editorial 05',
-    span: 'half',
-    caption: 'F3RAL MOTION',
-  },
-  {
-    url: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?w=800&q=80',
-    alt: 'Editorial 06',
-    span: 'full',
-    caption: 'ZERO COMPROMISE',
-  },
-  {
-    url: 'https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800&q=80',
-    alt: 'Editorial 07',
-    span: 'half',
-    caption: 'EDGE TERRITORY',
-  },
-  {
-    url: 'https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=800&q=80',
-    alt: 'Editorial 08',
-    span: 'half',
-    caption: 'PRIMAL INSTINCT',
-  },
-  {
-    url: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=800&q=80',
-    alt: 'Editorial 09',
-    span: 'half',
-    caption: 'STRUCTURED CHAOS',
-  },
-  {
-    url: 'https://images.unsplash.com/photo-1560243563-062bfc001d68?w=800&q=80',
-    alt: 'Editorial 10',
-    span: 'half',
-    caption: 'NOCTURNAL WEAR',
-  },
-  {
-    url: 'https://images.unsplash.com/photo-1495385794356-15371f348c31?w=800&q=80',
-    alt: 'Editorial 11',
-    span: 'half',
-    caption: 'SIGNAL / NOISE',
-  },
-  {
-    url: 'https://images.unsplash.com/photo-1520975700000-85de1327ff64?w=800&q=80',
-    alt: 'Editorial 12',
-    span: 'half',
-    caption: 'AFTERBURN',
-  },
+const CAPTIONS = [
+  'SEASON 01 — APEX',
+  'UNTAMED / OUTERWEAR',
+  'TECHNICAL SERIES',
+  'BUILT IN THE DARK',
+  'F3RAL MOTION',
+  'ZERO COMPROMISE',
+  'EDGE TERRITORY',
+  'PRIMAL INSTINCT',
+  'STRUCTURED CHAOS',
+  'NOCTURNAL WEAR',
+  'SIGNAL / NOISE',
+  'AFTERBURN',
+  'PACK MENTALITY',
+  'STREET APEX',
+  'NIGHT SHIFT',
+  'FERAL INSTINCT',
+  'LAST LIGHT',
 ]
+
+const LOOKBOOK_IMAGES = Array.from({ length: 17 }, (_, i) => {
+  const n = String(i + 1).padStart(2, '0')
+  return {
+    url: `/lookbook/${n}.jpg`,
+    alt: `Editorial ${n}`,
+    span: 'half',
+    caption: CAPTIONS[i],
+  }
+})
 
 const ImageCard = ({ image, index, shouldReduceMotion }) => {
   const isFull = image.span === 'full'

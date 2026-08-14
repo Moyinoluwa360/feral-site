@@ -22,10 +22,11 @@ export const PAYSTACK_AMOUNT_MULTIPLIER = 100
 //
 // Add, remove, or rename regions freely. The key is what gets saved to orders.
 export const SHIPPING_RATES = {
-  'Lagos': 2000,
-  'Abuja': 2500,
-  'Other Nigeria': 2500,
-  'International': 8000,
+  'Lagos': 2500,
+  'Ibadan': 3500,
+  'Osun': 4000,
+  'Akure': 4000,
+  'Other Nigeria': 6000,
 }
 
 export const SHIPPING_REGIONS = Object.keys(SHIPPING_RATES)
@@ -37,6 +38,7 @@ export const FREE_SHIPPING_THRESHOLD = Infinity
 
 // ─── HELPER ──────────────────────────────────────────────────────────────────
 export function calculateShipping(region, subtotal) {
+  if (!region) return 0
   if (subtotal >= FREE_SHIPPING_THRESHOLD) return 0
   const rate = SHIPPING_RATES[region]
   return rate !== undefined ? rate : (SHIPPING_RATES['Other Nigeria'] ?? 0)
