@@ -27,5 +27,34 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == uid;
       allow read: if isAdmin();
     }
+
+    // Lookbook: anyone can read, only admins can write (via the admin app).
+    match /lookbook/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Contact messages: anyone can submit one (the public contact form),
+    // but only an admin can read, mark as read, or delete them.
+    match /contactMessages/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['name', 'email', 'subject', 'message', 'read', 'createdAt']) &&
+        request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() < 200 &&
+        request.resource.data.email is string && request.resource.data.email.size() > 0 && request.resource.data.email.size() < 200 &&
+        request.resource.data.subject is string && request.resource.data.subject.size() < 300 &&
+        request.resource.data.message is string && request.resource.data.message.size() > 0 && request.resource.data.message.size() < 5000 &&
+        request.resource.data.read == false;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Newsletter subscribers: doc ID is the email itself, so a repeat
+    // subscribe is just denied (already on the list) rather than erroring.
+    // Anyone can add themselves; only an admin can view or remove the list.
+    match /subscribers/{email} {
+      allow create: if resource == null &&
+        request.resource.data.keys().hasOnly(['email', 'createdAt']) &&
+        request.resource.data.email == email;
+      allow update: if false;
+      allow read, delete: if isAdmin();
+    }
   }
 }

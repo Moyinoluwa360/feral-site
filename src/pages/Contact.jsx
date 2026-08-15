@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
 import { FiInstagram, FiTwitter, FiYoutube, FiMail, FiMapPin, FiCheck } from 'react-icons/fi'
+import { db } from '../lib/firebase'
 import GlitchText from '../components/GlitchText'
 
 const Contact = () => {
@@ -8,6 +10,8 @@ const Contact = () => {
 
   const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' })
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const [errors, setErrors] = useState({})
 
   const validate = () => {
@@ -20,7 +24,7 @@ const Contact = () => {
     return e
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     const errs = validate()
     if (Object.keys(errs).length > 0) {
@@ -28,7 +32,23 @@ const Contact = () => {
       return
     }
     setErrors({})
-    setSubmitted(true)
+    setSubmitError('')
+    setSubmitting(true)
+    try {
+      await addDoc(collection(db, 'contactMessages'), {
+        name: form.name.trim(),
+        email: form.email.trim(),
+        subject: form.subject.trim(),
+        message: form.message.trim(),
+        read: false,
+        createdAt: serverTimestamp(),
+      })
+      setSubmitted(true)
+    } catch {
+      setSubmitError('Failed to send. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleChange = (field) => (e) => {
@@ -195,6 +215,11 @@ const Contact = () => {
               </motion.div>
             ) : (
               <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
+                {submitError && (
+                  <div className="px-4 py-3 border border-[#c81e1e]/40 bg-[#c81e1e]/10">
+                    <p className="text-[#c81e1e] font-['Space_Grotesk'] text-sm">{submitError}</p>
+                  </div>
+                )}
                 <div>
                   <label className="block text-white/40 font-['Space_Grotesk'] text-xs uppercase tracking-widest mb-2">
                     Name
@@ -259,8 +284,12 @@ const Contact = () => {
                   )}
                 </div>
 
-                <button type="submit" className="btn-primary text-sm py-4 mt-2">
-                  SEND MESSAGE
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="btn-primary text-sm py-4 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submitting ? 'SENDING…' : 'SEND MESSAGE'}
                 </button>
               </form>
             )}

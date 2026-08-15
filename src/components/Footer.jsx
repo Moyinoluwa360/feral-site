@@ -1,14 +1,31 @@
 import { Link } from 'react-router-dom'
 import { useState } from 'react'
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { FiInstagram, FiTwitter, FiYoutube } from 'react-icons/fi'
+import { db } from '../lib/firebase'
 
 const Footer = () => {
   const [email, setEmail] = useState('')
   const [subscribed, setSubscribed] = useState(false)
+  const [subscribing, setSubscribing] = useState(false)
 
-  const handleSubscribe = (e) => {
+  const handleSubscribe = async (e) => {
     e.preventDefault()
-    if (email.trim()) {
+    const normalized = email.trim().toLowerCase()
+    if (!normalized) return
+
+    setSubscribing(true)
+    try {
+      await setDoc(doc(db, 'subscribers', normalized), {
+        email: normalized,
+        createdAt: serverTimestamp(),
+      })
+    } catch {
+      // Already subscribed (security rules deny overwriting an existing
+      // subscriber) or a transient error — either way, treat it as success
+      // from the visitor's side rather than exposing which case it was.
+    } finally {
+      setSubscribing(false)
       setSubscribed(true)
       setEmail('')
     }
@@ -102,8 +119,8 @@ const Footer = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                 />
-                <button type="submit" className="btn-primary text-sm py-3">
-                  Subscribe
+                <button type="submit" disabled={subscribing} className="btn-primary text-sm py-3 disabled:opacity-50">
+                  {subscribing ? 'Subscribing…' : 'Subscribe'}
                 </button>
               </form>
             )}
