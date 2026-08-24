@@ -112,7 +112,7 @@ const Contact = () => {
               <div className="flex items-start gap-4">
                 <FiMail size={16} className="text-[#c81e1e] mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="text-white font-['Space_Grotesk'] text-sm">contact@feralwear.com</p>
+                  <p className="text-white font-['Space_Grotesk'] text-sm">olanrewajurauf088@gmail.com</p>
                   <p className="text-white/30 font-['Space_Grotesk'] text-xs">General enquiries</p>
                 </div>
               </div>
