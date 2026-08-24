@@ -5,7 +5,8 @@ import { getTotalStock } from '../lib/stock'
 
 const ProductCard = ({ product }) => {
   const shouldReduceMotion = useReducedMotion()
-  const outOfStock = getTotalStock(product) <= 0
+  const isPreorder = Boolean(product.preorder)
+  const outOfStock = !isPreorder && getTotalStock(product) <= 0
 
   return (
     <Link to={`/product/${product.id}`} className="group block">
@@ -41,6 +42,14 @@ const ProductCard = ({ product }) => {
               </span>
             ) : (
               <>
+                {isPreorder && (
+                  <span
+                    className="bg-[#0a0a0a] text-[#c81e1e] text-[10px] px-2 py-0.5 uppercase tracking-widest border border-[#c81e1e]"
+                    style={{ fontFamily: "'Big Shoulders Stencil', sans-serif", fontWeight: 700 }}
+                  >
+                    Preorder
+                  </span>
+                )}
                 {product.new && (
                   <span
                     className="bg-[#c81e1e] text-white text-[10px] px-2 py-0.5 uppercase tracking-widest"
@@ -67,7 +76,7 @@ const ProductCard = ({ product }) => {
               className={`text-sm uppercase tracking-widest ${outOfStock ? 'text-white/40' : 'text-[#c81e1e]'}`}
               style={{ fontFamily: "'Big Shoulders Stencil', sans-serif", fontWeight: 700 }}
             >
-              {outOfStock ? 'Sold Out' : 'Shop Now'}
+              {outOfStock ? 'Sold Out' : isPreorder ? 'Preorder Now' : 'Shop Now'}
             </span>
           </div>
         </div>

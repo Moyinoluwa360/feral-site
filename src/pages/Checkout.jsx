@@ -90,6 +90,8 @@ const Checkout = () => {
   }
 
   // ── Stock validation before opening Paystack ──────────────────────────────
+  // Preorder products (per the catalog itself, not the client-held cart item)
+  // skip the availability check — they can be ordered ahead of stock existing.
   const validateStock = useCallback(async () => {
     const errors = []
     for (const item of items) {
@@ -99,7 +101,10 @@ const Checkout = () => {
           errors.push(`${item.product.name} is no longer available.`)
           continue
         }
-        const stock = snap.data().stock ?? {}
+        const data = snap.data()
+        if (data.preorder) continue
+
+        const stock = data.stock ?? {}
         const stockKey = item.color ? `${item.color}|${item.size}` : item.size
         const available = stock[stockKey] ?? 0
         if (available < item.quantity) {
@@ -114,26 +119,27 @@ const Checkout = () => {
     return errors
   }, [items])
 
+  const hasPreorderItems = items.some((item) => item.product.preorder)
+
   // ── Verify payment with backend after Paystack callback fires ─────────────
   const verifyPayment = async (response) => {
     setVerifying(true)
     try {
+      // subtotal/shippingCost/total are NOT sent here — verifyPayment recomputes
+      // them itself from Firestore product prices and the shipping-rate table,
+      // so a tampered client can't talk it into charging less than the real total.
       const verify = httpsCallable(functions, 'verifyPayment')
       const result = await verify({
         reference: response.reference,
         cartItems: items.map((item) => ({
           productId: item.product.id,
           name: item.product.name,
-          price: item.product.price,
           image: item.product.images?.[0] ?? '',
           size: item.size,
           color: item.color ?? null,
           quantity: item.quantity,
         })),
         shippingDetails: form,
-        shippingCost: shipping,
-        subtotal,
-        total,
       })
       const { orderId } = result.data ?? {}
       if (orderId) {
@@ -274,6 +280,14 @@ const Checkout = () => {
           {paymentError && (
             <div className="mb-8 px-4 py-3 border border-[#c81e1e]/40 bg-[#c81e1e]/10">
               <p className="text-[#c81e1e] font-['Space_Grotesk'] text-sm">{paymentError}</p>
+            </div>
+          )}
+
+          {hasPreorderItems && (
+            <div className="mb-8 px-4 py-3 border border-white/15 bg-white/3">
+              <p className="text-white/60 font-['Space_Grotesk'] text-sm">
+                Your cart includes preorder item(s). You'll be charged in full today; preorder items ship once they arrive in stock.
+              </p>
             </div>
           )}
 
@@ -445,6 +459,9 @@ const Checkout = () => {
                             style={{ fontFamily: "'Big Shoulders Stencil', sans-serif", fontWeight: 700 }}
                           >
                             {item.product.name}
+                            {item.product.preorder && (
+                              <span className="ml-2 text-[#c81e1e] text-[10px] align-middle">Preorder</span>
+                            )}
                           </p>
                           <p className="text-white/40 font-['Space_Grotesk'] text-xs">
                             {item.color ? `${item.color}, ` : ''}{item.size} × {item.quantity}

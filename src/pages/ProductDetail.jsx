@@ -62,13 +62,20 @@ const ProductDetail = () => {
   }
 
   const hasColors = product.colors?.length > 0
-  const productSoldOut = getTotalStock(product) <= 0
+  const isPreorder = Boolean(product.preorder)
+  const productSoldOut = !isPreorder && getTotalStock(product) <= 0
 
-  // Check available stock for the selected size (+ color, if this product has them)
+  // Check available stock for the selected size (+ color, if this product has them).
+  // Preorder products skip stock gating entirely — they can be ordered regardless
+  // of what's physically on hand.
   const canCheckStock = selectedSize && (!hasColors || selectedColor)
   const stockKey = canCheckStock ? (hasColors ? `${selectedColor.name}|${selectedSize}` : selectedSize) : null
   const stockForSize = stockKey ? (product.stock?.[stockKey] ?? 0) : null
-  const outOfStock = stockForSize !== null && stockForSize === 0
+  const outOfStock = !isPreorder && stockForSize !== null && stockForSize === 0
+
+  const preorderShipText = product.preorderReleaseDate
+    ? `Ships ${new Date(product.preorderReleaseDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`
+    : product.preorderNote || null
 
   const handleSelectColor = (color) => {
     setSelectedColor(color)
@@ -164,17 +171,33 @@ const ProductDetail = () => {
               {product.name}
             </GlitchText>
 
-            <div className="flex items-center gap-3 mb-8">
-              <p className="text-white font-['Space_Grotesk'] text-3xl font-semibold">
-                {CURRENCY_SYMBOL}{product.price.toLocaleString()}
-              </p>
-              {productSoldOut && (
-                <span
-                  className="bg-black/60 text-white/70 text-xs px-3 py-1 uppercase tracking-widest border border-white/20"
-                  style={{ fontFamily: "'Big Shoulders Stencil', sans-serif", fontWeight: 700 }}
-                >
-                  Sold Out
-                </span>
+            <div className="mb-8">
+              <div className="flex items-center gap-3">
+                <p className="text-white font-['Space_Grotesk'] text-3xl font-semibold">
+                  {CURRENCY_SYMBOL}{product.price.toLocaleString()}
+                </p>
+                {productSoldOut && (
+                  <span
+                    className="bg-black/60 text-white/70 text-xs px-3 py-1 uppercase tracking-widest border border-white/20"
+                    style={{ fontFamily: "'Big Shoulders Stencil', sans-serif", fontWeight: 700 }}
+                  >
+                    Sold Out
+                  </span>
+                )}
+                {isPreorder && !productSoldOut && (
+                  <span
+                    className="bg-[#0a0a0a] text-[#c81e1e] text-xs px-3 py-1 uppercase tracking-widest border border-[#c81e1e]"
+                    style={{ fontFamily: "'Big Shoulders Stencil', sans-serif", fontWeight: 700 }}
+                  >
+                    Preorder
+                  </span>
+                )}
+              </div>
+
+              {isPreorder && preorderShipText && (
+                <p className="text-white/40 font-['Space_Grotesk'] text-xs uppercase tracking-widest mt-2">
+                  {preorderShipText}
+                </p>
               )}
             </div>
 
@@ -226,7 +249,7 @@ const ProductDetail = () => {
                     ? (selectedColor ? `${selectedColor.name}|${size}` : null)
                     : size
                   const sizeStock = sizeStockKey ? (product.stock?.[sizeStockKey] ?? 0) : null
-                  const soldOut = sizeStock !== null && sizeStock === 0
+                  const soldOut = !isPreorder && sizeStock !== null && sizeStock === 0
                   return (
                     <button
                       key={size}
@@ -305,7 +328,7 @@ const ProductDetail = () => {
                       className="flex items-center justify-center gap-2"
                     >
                       <FiCheck size={16} />
-                      ADDED TO CART
+                      {isPreorder ? 'PREORDER ADDED' : 'ADDED TO CART'}
                     </motion.span>
                   ) : (
                     <motion.span
@@ -314,7 +337,7 @@ const ProductDetail = () => {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 10 }}
                     >
-                      ADD TO CART
+                      {isPreorder ? 'PREORDER NOW' : 'ADD TO CART'}
                     </motion.span>
                   )}
                 </AnimatePresence>

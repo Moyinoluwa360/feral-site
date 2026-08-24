@@ -175,7 +175,12 @@ const OrderDetail = () => {
             <div key={i} className="flex items-center gap-3">
               <img src={item.image} alt={item.name} className="w-10 h-12 object-cover bg-white/5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-white font-['Space_Grotesk'] text-sm truncate">{item.name}</p>
+                <p className="text-white font-['Space_Grotesk'] text-sm truncate">
+                  {item.name}
+                  {item.isPreorder && (
+                    <span className="ml-2 text-[#c81e1e] text-[10px] uppercase tracking-widest align-middle">Preorder</span>
+                  )}
+                </p>
                 <p className="text-white/40 font-['Space_Grotesk'] text-xs">
                   {item.color ? `${item.color}, ` : ''}{item.size} × {item.quantity}
                 </p>

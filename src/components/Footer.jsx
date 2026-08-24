@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
-import { FiInstagram, FiTwitter, FiYoutube } from 'react-icons/fi'
+import { FaInstagram, FaTiktok } from 'react-icons/fa'
 import { db } from '../lib/firebase'
 
 const Footer = () => {
@@ -137,31 +137,22 @@ const Footer = () => {
 
           <div className="flex items-center gap-5">
             <a
-              href="https://instagram.com"
+              href="https://www.tiktok.com/@f3ral_district?_r=1&_t=ZS-98uD4XQcEKd"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white/40 hover:text-[#c81e1e] transition-colors"
+              aria-label="TikTok"
+            >
+              <FaTiktok size={18} />
+            </a>
+            <a
+              href="https://www.instagram.com/f3ra_1?utm_source=qr"
               target="_blank"
               rel="noopener noreferrer"
               className="text-white/40 hover:text-[#c81e1e] transition-colors"
               aria-label="Instagram"
             >
-              <FiInstagram size={18} />
-            </a>
-            <a
-              href="https://twitter.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-white/40 hover:text-[#c81e1e] transition-colors"
-              aria-label="Twitter"
-            >
-              <FiTwitter size={18} />
-            </a>
-            <a
-              href="https://youtube.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-white/40 hover:text-[#c81e1e] transition-colors"
-              aria-label="YouTube"
-            >
-              <FiYoutube size={18} />
+              <FaInstagram size={18} />
             </a>
           </div>
         </div>

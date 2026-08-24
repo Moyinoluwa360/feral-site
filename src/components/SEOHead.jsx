@@ -59,7 +59,9 @@ const SEOHead = ({
               '@type': 'Offer',
               price: productData.price,
               priceCurrency: import.meta.env.VITE_CURRENCY || 'NGN',
-              availability: 'https://schema.org/InStock',
+              availability: productData.preorder
+                ? 'https://schema.org/PreOrder'
+                : 'https://schema.org/InStock',
               url: canonical,
             },
           })}

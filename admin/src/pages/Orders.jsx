@@ -161,6 +161,9 @@ const Orders = () => {
                       <td className="p-0">
                         <Link to={`/orders/${order.id}`} className="block p-4 text-[#c81e1e] font-['Space_Grotesk'] text-sm">
                           {order.reference}
+                          {order.items?.some((i) => i.isPreorder) && (
+                            <span className="ml-2 text-white/40 text-[10px] uppercase tracking-widest align-middle">Preorder</span>
+                          )}
                         </Link>
                       </td>
                       <td className="p-4 text-white/70 font-['Space_Grotesk'] text-sm">

@@ -135,7 +135,9 @@ const Products = () => {
                     </span>
                   </td>
                   <td className="p-4 font-['Space_Grotesk'] text-xs text-white/40">
-                    {[product.featured && 'Featured', product.new && 'New'].filter(Boolean).join(', ')}
+                    {[product.featured && 'Featured', product.new && 'New', product.preorder && 'Preorder']
+                      .filter(Boolean)
+                      .join(', ')}
                   </td>
                   <td className="p-4 text-right whitespace-nowrap">
                     <Link

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
-import { FiInstagram, FiTwitter, FiYoutube, FiMail, FiMapPin, FiCheck } from 'react-icons/fi'
+import { FiMail, FiMapPin, FiCheck } from 'react-icons/fi'
+import { FaInstagram, FaTiktok } from 'react-icons/fa'
 import { db } from '../lib/firebase'
 import GlitchText from '../components/GlitchText'
 
@@ -119,8 +120,8 @@ const Contact = () => {
               <div className="flex items-start gap-4">
                 <FiMapPin size={16} className="text-[#c81e1e] mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="text-white font-['Space_Grotesk'] text-sm">Detroit, Michigan</p>
-                  <p className="text-white/30 font-['Space_Grotesk'] text-xs">United States</p>
+                  <p className="text-white font-['Space_Grotesk'] text-sm">Lagos</p>
+                  <p className="text-white/30 font-['Space_Grotesk'] text-xs">Nigeria</p>
                 </div>
               </div>
             </div>
@@ -134,31 +135,22 @@ const Contact = () => {
               </p>
               <div className="flex items-center gap-5">
                 <a
-                  href="https://instagram.com"
+                  href="https://www.tiktok.com/@f3ral_district?_r=1&_t=ZS-98uD4XQcEKd"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 text-white/40 hover:text-[#c81e1e] transition-colors font-['Space_Grotesk'] text-sm"
                 >
-                  <FiInstagram size={18} />
+                  <FaTiktok size={18} />
+                  <span>TikTok</span>
+                </a>
+                <a
+                  href="https://www.instagram.com/f3ra_1?utm_source=qr"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-white/40 hover:text-[#c81e1e] transition-colors font-['Space_Grotesk'] text-sm"
+                >
+                  <FaInstagram size={18} />
                   <span>Instagram</span>
-                </a>
-                <a
-                  href="https://twitter.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-white/40 hover:text-[#c81e1e] transition-colors font-['Space_Grotesk'] text-sm"
-                >
-                  <FiTwitter size={18} />
-                  <span>Twitter</span>
-                </a>
-                <a
-                  href="https://youtube.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-white/40 hover:text-[#c81e1e] transition-colors font-['Space_Grotesk'] text-sm"
-                >
-                  <FiYoutube size={18} />
-                  <span>YouTube</span>
                 </a>
               </div>
             </div>

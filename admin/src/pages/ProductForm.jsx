@@ -20,6 +20,9 @@ const EMPTY_FORM = {
   images: [],
   featured: false,
   isNew: false,
+  preorder: false,
+  preorderReleaseDate: '',
+  preorderNote: '',
 }
 
 const gridKey = (colorIdx, size) => (colorIdx === null || colorIdx === undefined ? size : `${colorIdx}|${size}`)
@@ -87,6 +90,9 @@ const ProductForm = () => {
         images: data.images ?? [],
         featured: Boolean(data.featured),
         isNew: Boolean(data.new),
+        preorder: Boolean(data.preorder),
+        preorderReleaseDate: data.preorderReleaseDate ?? '',
+        preorderNote: data.preorderNote ?? '',
       })
       setLoading(false)
     }
@@ -114,6 +120,19 @@ const ProductForm = () => {
 
   const handleStockChange = (colorIdx, size, value) => {
     setForm((f) => ({ ...f, stock: { ...f.stock, [gridKey(colorIdx, size)]: Number(value) || 0 } }))
+  }
+
+  // Adds newly-arrived units to whatever stock is already recorded, rather than
+  // overwriting it — important because a preordered size/color can sit at a
+  // negative number (units sold ahead of physical stock), and typing the raw
+  // received count over that would silently double-count or drop the units
+  // already promised to preorder customers.
+  const handleRestockAdd = (colorIdx, size, delta) => {
+    const key = gridKey(colorIdx, size)
+    setForm((f) => ({
+      ...f,
+      stock: { ...f.stock, [key]: (Number(f.stock[key]) || 0) + (Number(delta) || 0) },
+    }))
   }
 
   const handleAddColor = () => {
@@ -256,6 +275,9 @@ const ProductForm = () => {
         images: [...form.images, ...uploadedUrls],
         featured: form.featured,
         new: form.isNew,
+        preorder: form.preorder,
+        preorderReleaseDate: form.preorder ? (form.preorderReleaseDate || null) : null,
+        preorderNote: form.preorder ? form.preorderNote.trim() : '',
       }
 
       if (isEditing) {
@@ -457,22 +479,42 @@ const ProductForm = () => {
 
         {form.sizes.length > 0 && (
           <div>
-            <label className="block text-white/50 font-['Space_Grotesk'] text-xs uppercase tracking-widest mb-2">
+            <label className="block text-white/50 font-['Space_Grotesk'] text-xs uppercase tracking-widest mb-1">
               Stock {form.colors.length > 0 ? 'per color / size' : 'per size'}
             </label>
+            <p className="text-white/30 font-['Space_Grotesk'] text-xs mb-3">
+              A negative number means preorders have been sold ahead of stock. Use the small "+recv" field
+              (type a quantity, hit Enter) to add newly-arrived units — it nets against preorders automatically
+              instead of overwriting them. Uncheck Preorder below once you're ready for new orders to be
+              gated by real stock again.
+            </p>
 
             {form.colors.length === 0 ? (
               <div className="grid grid-cols-4 gap-3">
                 {form.sizes.map((size) => (
                   <div key={size}>
                     <span className="block text-white/40 font-['Space_Grotesk'] text-xs mb-1">{size}</span>
-                    <input
-                      type="number"
-                      min="0"
-                      className="input-dark"
-                      value={form.stock[gridKey(null, size)] ?? 0}
-                      onChange={(e) => handleStockChange(null, size, e.target.value)}
-                    />
+                    <div className="flex gap-1.5">
+                      <input
+                        type="number"
+                        min="0"
+                        className="input-dark"
+                        value={form.stock[gridKey(null, size)] ?? 0}
+                        onChange={(e) => handleStockChange(null, size, e.target.value)}
+                      />
+                      <input
+                        type="number"
+                        placeholder="+recv"
+                        title="Add received units to current stock (handles negative/preordered stock correctly)"
+                        className="input-dark w-16 text-xs"
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter') return
+                          e.preventDefault()
+                          handleRestockAdd(null, size, e.target.value)
+                          e.target.value = ''
+                        }}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -501,13 +543,27 @@ const ProductForm = () => {
                         </td>
                         {form.sizes.map((size) => (
                           <td key={size} className="px-2 py-1">
-                            <input
-                              type="number"
-                              min="0"
-                              className="input-dark w-20"
-                              value={form.stock[gridKey(idx, size)] ?? 0}
-                              onChange={(e) => handleStockChange(idx, size, e.target.value)}
-                            />
+                            <div className="flex gap-1">
+                              <input
+                                type="number"
+                                min="0"
+                                className="input-dark w-16"
+                                value={form.stock[gridKey(idx, size)] ?? 0}
+                                onChange={(e) => handleStockChange(idx, size, e.target.value)}
+                              />
+                              <input
+                                type="number"
+                                placeholder="+recv"
+                                title="Add received units to current stock (handles negative/preordered stock correctly)"
+                                className="input-dark w-14 text-xs"
+                                onKeyDown={(e) => {
+                                  if (e.key !== 'Enter') return
+                                  e.preventDefault()
+                                  handleRestockAdd(idx, size, e.target.value)
+                                  e.target.value = ''
+                                }}
+                              />
+                            </div>
                           </td>
                         ))}
                       </tr>
@@ -593,6 +649,48 @@ const ProductForm = () => {
             />
             New Arrival
           </label>
+        </div>
+
+        <div className="border border-white/10 p-4">
+          <label className="flex items-center gap-2 text-white/60 font-['Space_Grotesk'] text-sm cursor-pointer mb-1">
+            <input
+              type="checkbox"
+              checked={form.preorder}
+              onChange={(e) => setForm((f) => ({ ...f, preorder: e.target.checked }))}
+            />
+            Preorder
+          </label>
+          <p className="text-white/30 font-['Space_Grotesk'] text-xs mb-4">
+            Customers can buy this product through the normal checkout even when a size/color shows 0 stock.
+          </p>
+
+          {form.preorder && (
+            <div className="grid grid-cols-2 gap-5">
+              <div>
+                <label className="block text-white/50 font-['Space_Grotesk'] text-xs uppercase tracking-widest mb-2">
+                  Expected Ship Date
+                </label>
+                <input
+                  type="date"
+                  className="input-dark"
+                  value={form.preorderReleaseDate}
+                  onChange={(e) => setForm((f) => ({ ...f, preorderReleaseDate: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-white/50 font-['Space_Grotesk'] text-xs uppercase tracking-widest mb-2">
+                  Note (shown if no ship date)
+                </label>
+                <input
+                  type="text"
+                  className="input-dark"
+                  placeholder='e.g. "Ships in 4-6 weeks"'
+                  value={form.preorderNote}
+                  onChange={(e) => setForm((f) => ({ ...f, preorderNote: e.target.value }))}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <button type="submit" disabled={saving} className="btn-primary self-start px-8 py-3">

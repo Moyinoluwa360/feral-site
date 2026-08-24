@@ -104,6 +104,11 @@ const Cart = () => {
                       <p className="text-white/40 font-['Space_Grotesk'] text-xs mt-1 capitalize">
                         {item.color ? `${item.color} · ` : ''}Size: {item.size}
                       </p>
+                      {item.product.preorder && (
+                        <span className="inline-block mt-1 text-[#c81e1e] font-['Space_Grotesk'] text-[10px] uppercase tracking-widest border border-[#c81e1e] px-1.5 py-0.5">
+                          Preorder
+                        </span>
+                      )}
                       <p className="text-white font-['Space_Grotesk'] text-sm font-semibold mt-2">
                         {CURRENCY_SYMBOL}{(item.product.price * item.quantity).toLocaleString()}
                       </p>

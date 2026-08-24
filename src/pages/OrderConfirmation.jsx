@@ -229,10 +229,18 @@ const OrderConfirmation = () => {
                         style={{ fontFamily: "'Big Shoulders Stencil', sans-serif", fontWeight: 700 }}
                       >
                         {item.name}
+                        {item.isPreorder && (
+                          <span className="ml-2 text-[#c81e1e] text-[10px] align-middle">Preorder</span>
+                        )}
                       </p>
                       <p className="text-white/40 font-['Space_Grotesk'] text-xs mt-1">
                         {item.color ? `Color: ${item.color} · ` : ''}Size: {item.size} · Qty: {item.quantity}
                       </p>
+                      {item.isPreorder && item.preorderReleaseDate && (
+                        <p className="text-white/30 font-['Space_Grotesk'] text-[11px] mt-0.5">
+                          Expected to ship {new Date(item.preorderReleaseDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        </p>
+                      )}
                     </div>
                     <p className="text-white font-['Space_Grotesk'] text-sm font-semibold">
                       {CURRENCY_SYMBOL}{(item.price * item.quantity).toLocaleString()}

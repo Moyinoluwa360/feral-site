@@ -3,11 +3,14 @@
 // Called by the Checkout page after Paystack reports a successful payment.
 // This function:
 //   1. Verifies the transaction with Paystack's API (never trust client-side success alone)
-//   2. Checks the paid amount matches the expected total
-//   3. Uses a Firestore transaction to:
-//      a. Decrement stock for each ordered item (fails atomically if stock is insufficient)
-//      b. Create the order document
-//   4. Returns the new order ID to the client
+//   2. Uses a Firestore transaction to:
+//      a. Decrement stock for each ordered item (fails atomically if stock is
+//         insufficient, except for preorder products, which are exempt)
+//      b. Recompute subtotal/shipping/total from Firestore's own product prices and
+//         the shipping-rate table — never from client-supplied amounts — and check
+//         the Paystack-paid amount against that (prevents price tampering)
+//      c. Create the order document, with item prices taken from the catalog
+//   3. Returns the new order ID to the client
 //
 // Being a `callable` function, the Firebase client SDK automatically attaches
 // the caller's ID token — `request.auth.uid` is verified server-side, so we
@@ -23,6 +26,25 @@ const db = getFirestore()
 
 const paystackSecretKey = defineSecret('PAYSTACK_SECRET_KEY')
 const PAYSTACK_AMOUNT_MULTIPLIER = 100
+
+// Mirrors src/lib/shipping.js SHIPPING_RATES/FREE_SHIPPING_THRESHOLD. Cloud
+// Functions can't import that file directly (it reads import.meta.env, which
+// only exists in the Vite client build) — if you change rates there, change
+// them here too. This copy is what verifyPayment actually charges against.
+const SHIPPING_RATES = {
+  'Lagos': 2500,
+  'Ibadan': 3500,
+  'Osun': 4000,
+  'Akure': 4000,
+  'Other Nigeria': 6000,
+}
+const FREE_SHIPPING_THRESHOLD = Infinity
+
+const shippingCostFor = (region, subtotal) => {
+  if (!region) return 0
+  if (subtotal >= FREE_SHIPPING_THRESHOLD) return 0
+  return SHIPPING_RATES[region] ?? SHIPPING_RATES['Other Nigeria'] ?? 0
+}
 
 // Stock is keyed by size alone for single-color products, or "color|size"
 // for products with color variants.
@@ -76,10 +98,9 @@ exports.verifyPayment = onCall({ secrets: [paystackSecretKey] }, async (request)
   }
   const userId = request.auth.uid
 
-  const { reference, cartItems, shippingDetails, shippingCost, subtotal, total } =
-    request.data ?? {}
+  const { reference, cartItems, shippingDetails } = request.data ?? {}
 
-  if (!reference || !Array.isArray(cartItems) || !shippingDetails) {
+  if (!reference || !Array.isArray(cartItems) || cartItems.length === 0 || !shippingDetails) {
     throw new HttpsError('invalid-argument', 'Missing required fields')
   }
 
@@ -100,18 +121,14 @@ exports.verifyPayment = onCall({ secrets: [paystackSecretKey] }, async (request)
     throw new HttpsError('failed-precondition', 'Payment not successful')
   }
 
-  // ── Step 2: Amount check (prevent price manipulation) ────────────────────
-  // Paystack stores amount in smallest currency unit (kobo, cents, etc.)
-  const expectedAmount = Math.round(Number(total) * PAYSTACK_AMOUNT_MULTIPLIER)
-
-  if (paystackData.data.amount < expectedAmount) {
-    console.error(
-      `[verifyPayment] Amount mismatch: paid=${paystackData.data.amount}, expected=${expectedAmount}`
-    )
-    throw new HttpsError('failed-precondition', 'Payment amount does not match order total')
-  }
-
-  // ── Step 3: Firestore transaction — decrement stock + create order ────────
+  // ── Step 2 & 3: Firestore transaction — price/amount check, stock, order ──
+  // The amount check happens *inside* the transaction, priced from Firestore's
+  // own product docs — never from client-supplied cartItems/subtotal/total.
+  // Those are only trustworthy for which product/size/color/qty was ordered;
+  // a tampered client could otherwise pay pennies for a full-price cart by
+  // just lying about the total. A failure here throws a plain Error so it
+  // falls into the catch block below and triggers an auto-refund, same as an
+  // insufficient-stock failure.
   try {
     const orderId = await db.runTransaction(async (transaction) => {
       // Group cart items by product (merging quantities per stock key) so each
@@ -120,25 +137,70 @@ exports.verifyPayment = onCall({ secrets: [paystackSecretKey] }, async (request)
       const productEntries = groupByProduct(cartItems)
       const productSnaps = await Promise.all(productEntries.map((e) => transaction.get(e.ref)))
 
+      let serverSubtotal = 0
+      const catalogPriceByProductId = new Map()
+      const catalogPreorderByProductId = new Map()
+
       productEntries.forEach((entry, i) => {
         const snap = productSnaps[i]
         if (!snap.exists) {
           throw new Error(`Product "${entry.name}" no longer exists`)
         }
 
-        const stock = snap.data().stock ?? {}
+        const data = snap.data()
+        const unitPrice = Number(data.price) || 0
+        const isPreorder = data.preorder === true
+        catalogPriceByProductId.set(snap.id, unitPrice)
+        catalogPreorderByProductId.set(snap.id, isPreorder
+          ? { isPreorder: true, preorderReleaseDate: data.preorderReleaseDate ?? null }
+          : { isPreorder: false, preorderReleaseDate: null })
+
+        const stock = data.stock ?? {}
         const updates = {}
         for (const [key, qty] of entry.quantities) {
-          const available = stock[key] ?? 0
-          if (available < qty) {
-            throw new Error(
-              `Insufficient stock for ${entry.name} (${describeStockKey(key)}): ` +
-                `${available} available, ${qty} requested`
-            )
+          // Preorder products (per the catalog, never the client) are exempt
+          // from the availability check — they can be ordered ahead of stock
+          // existing. Stock still decrements (and can go negative) so the
+          // admin can see how many units of a preorder have been sold.
+          if (!isPreorder) {
+            const available = stock[key] ?? 0
+            if (available < qty) {
+              throw new Error(
+                `Insufficient stock for ${entry.name} (${describeStockKey(key)}): ` +
+                  `${available} available, ${qty} requested`
+              )
+            }
           }
           updates[`stock.${key}`] = FieldValue.increment(-qty)
+          serverSubtotal += unitPrice * qty
         }
         transaction.update(entry.ref, updates)
+      })
+
+      const serverShippingCost = shippingCostFor(shippingDetails.region, serverSubtotal)
+      const serverTotal = serverSubtotal + serverShippingCost
+
+      // Paystack stores amount in smallest currency unit (kobo, cents, etc.)
+      const expectedAmount = Math.round(serverTotal * PAYSTACK_AMOUNT_MULTIPLIER)
+      if (paystackData.data.amount < expectedAmount) {
+        console.error(
+          `[verifyPayment] Amount mismatch: paid=${paystackData.data.amount}, expected=${expectedAmount}`
+        )
+        throw new Error('Payment amount does not match the order total.')
+      }
+
+      // Trust catalog prices (and preorder status), not client-supplied ones,
+      // in the stored record.
+      const verifiedItems = cartItems.map((item) => {
+        const preorderInfo = catalogPreorderByProductId.get(String(item.productId)) ?? {
+          isPreorder: false,
+          preorderReleaseDate: null,
+        }
+        return {
+          ...item,
+          price: catalogPriceByProductId.get(String(item.productId)) ?? (Number(item.price) || 0),
+          ...preorderInfo,
+        }
       })
 
       // Create the order document
@@ -147,11 +209,11 @@ exports.verifyPayment = onCall({ secrets: [paystackSecretKey] }, async (request)
         userId,
         reference,
         paystackId: paystackData.data.id,
-        items: cartItems,
+        items: verifiedItems,
         shipping: shippingDetails,
-        shippingCost: Number(shippingCost) || 0,
-        subtotal: Number(subtotal) || 0,
-        total: Number(total),
+        shippingCost: serverShippingCost,
+        subtotal: serverSubtotal,
+        total: serverTotal,
         currency: paystackData.data.currency,
         status: 'processing',
         // Firestore forbids FieldValue.serverTimestamp() inside array elements,
