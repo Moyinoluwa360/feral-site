@@ -15,6 +15,10 @@ const EMPTY_FORM = {
   // are no colors. Indexed rather than keyed by color name so renaming/removing
   // a color mid-edit doesn't silently lose already-entered stock numbers.
   stock: {},
+  // Read-only tally of units sold while Preorder is checked, keyed the same
+  // way as stock. Never edited here — it's incremented server-side by the
+  // checkout function and only reset (to {}) when Preorder is unchecked.
+  preorderCount: {},
   description: '',
   materials: '',
   images: [],
@@ -37,6 +41,17 @@ const rebuildStock = (colors, sizes, prevStock) => {
   return Object.fromEntries(keys.map((k) => [k, prevStock[k] ?? 0]))
 }
 
+// Same key layout as rebuildStock, but always zeroes every value — used when
+// Preorder is checked, since stock is pinned at 0 for the duration of a
+// preorder batch (units sold ahead of stock are tracked in preorderCount instead).
+const zeroedStock = (colors, sizes) => {
+  const keys =
+    colors.length > 0
+      ? colors.flatMap((_, idx) => sizes.map((s) => gridKey(idx, s)))
+      : sizes.map((s) => gridKey(null, s))
+  return Object.fromEntries(keys.map((k) => [k, 0]))
+}
+
 const ProductForm = () => {
   const { id } = useParams()
   const isEditing = Boolean(id)
@@ -49,6 +64,10 @@ const ProductForm = () => {
   const [loading, setLoading] = useState(isEditing)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  // Whether this product was already a preorder when the page loaded — used at
+  // submit time to detect "just closed the batch" (preorder true -> false),
+  // which is the only time preorderCount should be reset.
+  const initialPreorderRef = useRef(false)
 
   useEffect(() => {
     if (!isEditing) return
@@ -63,19 +82,23 @@ const ProductForm = () => {
       const colors = data.colors ?? []
       const sizes = data.sizes ?? []
       const savedStock = data.stock ?? {}
+      const savedPreorderCount = data.preorderCount ?? {}
 
-      // Saved stock is keyed by color NAME; the form's grid is keyed by
-      // color INDEX — convert on the way in.
+      // Saved stock (and preorderCount) is keyed by color NAME; the form's
+      // grid is keyed by color INDEX — convert on the way in.
       const stock = {}
+      const preorderCount = {}
       if (colors.length > 0) {
         colors.forEach((c, idx) => {
           sizes.forEach((s) => {
             stock[gridKey(idx, s)] = savedStock[`${c.name}|${s}`] ?? 0
+            preorderCount[gridKey(idx, s)] = savedPreorderCount[`${c.name}|${s}`] ?? 0
           })
         })
       } else {
         sizes.forEach((s) => {
           stock[s] = savedStock[s] ?? 0
+          preorderCount[s] = savedPreorderCount[s] ?? 0
         })
       }
 
@@ -85,6 +108,7 @@ const ProductForm = () => {
         colors,
         sizes,
         stock,
+        preorderCount,
         description: data.description ?? '',
         materials: data.materials ?? '',
         images: data.images ?? [],
@@ -94,6 +118,7 @@ const ProductForm = () => {
         preorderReleaseDate: data.preorderReleaseDate ?? '',
         preorderNote: data.preorderNote ?? '',
       })
+      initialPreorderRef.current = Boolean(data.preorder)
       setLoading(false)
     }
     load()
@@ -120,19 +145,6 @@ const ProductForm = () => {
 
   const handleStockChange = (colorIdx, size, value) => {
     setForm((f) => ({ ...f, stock: { ...f.stock, [gridKey(colorIdx, size)]: Number(value) || 0 } }))
-  }
-
-  // Adds newly-arrived units to whatever stock is already recorded, rather than
-  // overwriting it — important because a preordered size/color can sit at a
-  // negative number (units sold ahead of physical stock), and typing the raw
-  // received count over that would silently double-count or drop the units
-  // already promised to preorder customers.
-  const handleRestockAdd = (colorIdx, size, delta) => {
-    const key = gridKey(colorIdx, size)
-    setForm((f) => ({
-      ...f,
-      stock: { ...f.stock, [key]: (Number(f.stock[key]) || 0) + (Number(delta) || 0) },
-    }))
   }
 
   const handleAddColor = () => {
@@ -251,18 +263,30 @@ const ProductForm = () => {
       }))
 
       // Convert the index-keyed grid back into the name-keyed map Firestore stores.
+      // While Preorder is checked, stock is always written as 0 regardless of
+      // what's in form.stock — it's not editable in that state, but this guards
+      // against stale values (e.g. sizes/colors changed without re-zeroing).
       const stock = {}
       if (colors.length > 0) {
         colors.forEach((c, idx) => {
           form.sizes.forEach((s) => {
-            stock[`${c.name}|${s}`] = form.stock[gridKey(idx, s)] ?? 0
+            stock[`${c.name}|${s}`] = form.preorder ? 0 : form.stock[gridKey(idx, s)] ?? 0
           })
         })
       } else {
         form.sizes.forEach((s) => {
-          stock[s] = form.stock[gridKey(null, s)] ?? 0
+          stock[s] = form.preorder ? 0 : form.stock[gridKey(null, s)] ?? 0
         })
       }
+
+      // preorderCount is a live tally maintained server-side by the checkout
+      // function (incremented per preorder sale) — this form never edits it.
+      // The only time we touch it here is to reset it to {} when closing out
+      // a batch (preorder was checked, now isn't) or starting a brand-new
+      // product; otherwise we omit it entirely so a concurrent preorder sale
+      // between page-load and save isn't clobbered by a stale client snapshot.
+      const closingPreorderBatch = isEditing && initialPreorderRef.current && !form.preorder
+      const preorderCountUpdate = !isEditing || closingPreorderBatch ? { preorderCount: {} } : {}
 
       const payload = {
         name: form.name.trim(),
@@ -270,6 +294,7 @@ const ProductForm = () => {
         colors,
         sizes: form.sizes,
         stock,
+        ...preorderCountUpdate,
         description: form.description,
         materials: form.materials,
         images: [...form.images, ...uploadedUrls],
@@ -480,13 +505,12 @@ const ProductForm = () => {
         {form.sizes.length > 0 && (
           <div>
             <label className="block text-white/50 font-['Space_Grotesk'] text-xs uppercase tracking-widest mb-1">
-              Stock {form.colors.length > 0 ? 'per color / size' : 'per size'}
+              {form.preorder ? 'Preordered' : 'Stock'} {form.colors.length > 0 ? 'per color / size' : 'per size'}
             </label>
             <p className="text-white/30 font-['Space_Grotesk'] text-xs mb-3">
-              A negative number means preorders have been sold ahead of stock. Use the small "+recv" field
-              (type a quantity, hit Enter) to add newly-arrived units — it nets against preorders automatically
-              instead of overwriting them. Uncheck Preorder below once you're ready for new orders to be
-              gated by real stock again.
+              {form.preorder
+                ? 'Stock is locked at 0 while Preorder is checked. These are read-only counts of units customers have already ordered ahead of stock, updated live as preorders come in.'
+                : 'Enter the actual number of units on hand for each size/color.'}
             </p>
 
             {form.colors.length === 0 ? (
@@ -494,27 +518,15 @@ const ProductForm = () => {
                 {form.sizes.map((size) => (
                   <div key={size}>
                     <span className="block text-white/40 font-['Space_Grotesk'] text-xs mb-1">{size}</span>
-                    <div className="flex gap-1.5">
-                      <input
-                        type="number"
-                        min="0"
-                        className="input-dark"
-                        value={form.stock[gridKey(null, size)] ?? 0}
-                        onChange={(e) => handleStockChange(null, size, e.target.value)}
-                      />
-                      <input
-                        type="number"
-                        placeholder="+recv"
-                        title="Add received units to current stock (handles negative/preordered stock correctly)"
-                        className="input-dark w-16 text-xs"
-                        onKeyDown={(e) => {
-                          if (e.key !== 'Enter') return
-                          e.preventDefault()
-                          handleRestockAdd(null, size, e.target.value)
-                          e.target.value = ''
-                        }}
-                      />
-                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      className="input-dark"
+                      disabled={form.preorder}
+                      readOnly={form.preorder}
+                      value={form.preorder ? form.preorderCount[gridKey(null, size)] ?? 0 : form.stock[gridKey(null, size)] ?? 0}
+                      onChange={(e) => handleStockChange(null, size, e.target.value)}
+                    />
                   </div>
                 ))}
               </div>
@@ -543,27 +555,15 @@ const ProductForm = () => {
                         </td>
                         {form.sizes.map((size) => (
                           <td key={size} className="px-2 py-1">
-                            <div className="flex gap-1">
-                              <input
-                                type="number"
-                                min="0"
-                                className="input-dark w-16"
-                                value={form.stock[gridKey(idx, size)] ?? 0}
-                                onChange={(e) => handleStockChange(idx, size, e.target.value)}
-                              />
-                              <input
-                                type="number"
-                                placeholder="+recv"
-                                title="Add received units to current stock (handles negative/preordered stock correctly)"
-                                className="input-dark w-14 text-xs"
-                                onKeyDown={(e) => {
-                                  if (e.key !== 'Enter') return
-                                  e.preventDefault()
-                                  handleRestockAdd(idx, size, e.target.value)
-                                  e.target.value = ''
-                                }}
-                              />
-                            </div>
+                            <input
+                              type="number"
+                              min="0"
+                              className="input-dark w-16"
+                              disabled={form.preorder}
+                              readOnly={form.preorder}
+                              value={form.preorder ? form.preorderCount[gridKey(idx, size)] ?? 0 : form.stock[gridKey(idx, size)] ?? 0}
+                              onChange={(e) => handleStockChange(idx, size, e.target.value)}
+                            />
                           </td>
                         ))}
                       </tr>
@@ -656,12 +656,21 @@ const ProductForm = () => {
             <input
               type="checkbox"
               checked={form.preorder}
-              onChange={(e) => setForm((f) => ({ ...f, preorder: e.target.checked }))}
+              onChange={(e) => {
+                const checked = e.target.checked
+                setForm((f) => ({
+                  ...f,
+                  preorder: checked,
+                  stock: checked ? zeroedStock(f.colors, f.sizes) : f.stock,
+                }))
+              }}
             />
             Preorder
           </label>
           <p className="text-white/30 font-['Space_Grotesk'] text-xs mb-4">
-            Customers can buy this product through the normal checkout even when a size/color shows 0 stock.
+            Customers can buy this product through the normal checkout even though stock is 0. While checked,
+            stock stays locked at 0 and can't be edited — see the Preordered count above instead. Uncheck this
+            and enter real stock once units arrive to close out the batch.
           </p>
 
           {form.preorder && (

@@ -204,15 +204,21 @@ const ProductDetail = () => {
             {/* Color Selector */}
             {hasColors && (
               <div className="mb-8">
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 mb-3">
                   <span className="text-white/60 font-['Space_Grotesk'] text-xs uppercase tracking-widest">
-                    Color{selectedColor ? `: ${selectedColor.name}` : ''}
+                    Select Color{selectedColor ? `: ${selectedColor.name}` : ''}
                   </span>
                   {!selectedColor && (
-                    <span className="text-[#c81e1e] font-['Space_Grotesk'] text-xs">Required</span>
+                    <span className="text-[#c81e1e] font-['Space_Grotesk'] text-xs font-bold" aria-hidden="true">
+                      *
+                    </span>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-3">
+                <div
+                  className={`flex flex-wrap gap-3 p-2 -m-2 transition-all duration-200 ${
+                    !selectedColor ? 'ring-1 ring-[#c81e1e]/40 rounded' : ''
+                  }`}
+                >
                   {product.colors.map((color) => (
                     <button
                       key={color.name}
@@ -233,17 +239,21 @@ const ProductDetail = () => {
 
             {/* Size Selector */}
             <div className="mb-8">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2 mb-3">
                 <span className="text-white/60 font-['Space_Grotesk'] text-xs uppercase tracking-widest">
-                  Select Size
+                  Select Size{selectedSize ? `: ${selectedSize}` : ''}
                 </span>
                 {!selectedSize && (
-                  <span className="text-[#c81e1e] font-['Space_Grotesk'] text-xs">
-                    Required
+                  <span className="text-[#c81e1e] font-['Space_Grotesk'] text-xs font-bold" aria-hidden="true">
+                    *
                   </span>
                 )}
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div
+                className={`flex flex-wrap gap-2 p-2 -m-2 transition-all duration-200 ${
+                  !selectedSize ? 'ring-1 ring-[#c81e1e]/40 rounded' : ''
+                }`}
+              >
                 {product.sizes.map((size) => {
                   const sizeStockKey = hasColors
                     ? (selectedColor ? `${selectedColor.name}|${size}` : null)
@@ -317,6 +327,14 @@ const ProductDetail = () => {
             >
               {productSoldOut ? (
                 'SOLD OUT'
+              ) : hasColors && !selectedColor && !selectedSize ? (
+                'SELECT COLOR & SIZE'
+              ) : hasColors && !selectedColor ? (
+                'SELECT COLOR'
+              ) : !selectedSize ? (
+                'SELECT SIZE'
+              ) : outOfStock ? (
+                'OUT OF STOCK'
               ) : (
                 <AnimatePresence mode="wait">
                   {addedToCart ? (
@@ -343,12 +361,6 @@ const ProductDetail = () => {
                 </AnimatePresence>
               )}
             </button>
-
-            {!productSoldOut && (!selectedSize || (hasColors && !selectedColor)) && (
-              <p className="text-white/30 font-['Space_Grotesk'] text-xs text-center mb-4">
-                Please select a {hasColors && !selectedColor ? 'color' : 'size'} to continue
-              </p>
-            )}
 
             {/* Description / Materials Tabs */}
             <div className="mt-8 border-t border-white/10 pt-8">

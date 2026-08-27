@@ -130,9 +130,13 @@ const Products = () => {
                     {CURRENCY_SYMBOL}{Number(product.price ?? 0).toLocaleString()}
                   </td>
                   <td className="p-4 font-['Space_Grotesk'] text-sm">
-                    <span className={totalStock(product.stock) <= 5 ? 'text-[#c81e1e]' : 'text-white/60'}>
-                      {totalStock(product.stock)}
-                    </span>
+                    {product.preorder ? (
+                      <span className="text-white/60">{totalStock(product.preorderCount)} preordered</span>
+                    ) : (
+                      <span className={totalStock(product.stock) <= 5 ? 'text-[#c81e1e]' : 'text-white/60'}>
+                        {totalStock(product.stock)}
+                      </span>
+                    )}
                   </td>
                   <td className="p-4 font-['Space_Grotesk'] text-xs text-white/40">
                     {[product.featured && 'Featured', product.new && 'New', product.preorder && 'Preorder']

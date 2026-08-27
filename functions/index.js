@@ -5,7 +5,9 @@
 //   1. Verifies the transaction with Paystack's API (never trust client-side success alone)
 //   2. Uses a Firestore transaction to:
 //      a. Decrement stock for each ordered item (fails atomically if stock is
-//         insufficient, except for preorder products, which are exempt)
+//         insufficient). Preorder products are exempt from this check — stock
+//         stays pinned at 0 for them, and preorderCount is incremented instead
+//         so the admin can see demand without touching stock numbers.
 //      b. Recompute subtotal/shipping/total from Firestore's own product prices and
 //         the shipping-rate table — never from client-supplied amounts — and check
 //         the Paystack-paid amount against that (prevents price tampering)
@@ -59,6 +61,14 @@ const describeStockKey = (key) => {
 // Firestore transactions only allow ONE write per document, so if the same
 // product appears more than once (e.g. two different sizes or colors of the
 // same item), all of its stock changes must land in a single update() call.
+//
+// isPreorder is carried through from the order's stored items (all items for
+// a given product share the same value, since it's a catalog-level flag
+// applied uniformly per product in verifyPayment) — refundOrder uses it to
+// know whether to restore stock or reverse a preorderCount. It's absent on
+// cartItems (verifyPayment determines preorder status itself, fresh from the
+// catalog, so this field is unused there) and defaults to false, which is
+// also correct for pre-preorder-feature orders that only ever touched stock.
 const groupByProduct = (items) => {
   const byProduct = new Map()
   for (const item of items) {
@@ -67,6 +77,7 @@ const groupByProduct = (items) => {
       byProduct.set(productId, {
         ref: db.collection('products').doc(productId),
         name: item.name,
+        isPreorder: Boolean(item.isPreorder),
         quantities: new Map(),
       })
     }
@@ -160,9 +171,12 @@ exports.verifyPayment = onCall({ secrets: [paystackSecretKey] }, async (request)
         for (const [key, qty] of entry.quantities) {
           // Preorder products (per the catalog, never the client) are exempt
           // from the availability check — they can be ordered ahead of stock
-          // existing. Stock still decrements (and can go negative) so the
-          // admin can see how many units of a preorder have been sold.
-          if (!isPreorder) {
+          // existing. Stock stays untouched (it's pinned at 0 by the admin
+          // while Preorder is checked); instead we increment preorderCount so
+          // the admin can see demand without any stock math.
+          if (isPreorder) {
+            updates[`preorderCount.${key}`] = FieldValue.increment(qty)
+          } else {
             const available = stock[key] ?? 0
             if (available < qty) {
               throw new Error(
@@ -170,8 +184,8 @@ exports.verifyPayment = onCall({ secrets: [paystackSecretKey] }, async (request)
                   `${available} available, ${qty} requested`
               )
             }
+            updates[`stock.${key}`] = FieldValue.increment(-qty)
           }
-          updates[`stock.${key}`] = FieldValue.increment(-qty)
           serverSubtotal += unitPrice * qty
         }
         transaction.update(entry.ref, updates)
@@ -261,7 +275,9 @@ exports.verifyPayment = onCall({ secrets: [paystackSecretKey] }, async (request)
 //   1. Requires the caller to have the `admin` custom claim
 //   2. Looks up the order and refunds it via Paystack's API
 //   3. Uses a Firestore transaction to:
-//      a. Restore stock for each ordered item
+//      a. Restore stock for each ordered item — or, for items that were
+//         preordered, reverse the preorderCount instead (stock stays pinned
+//         at 0 for those; it was never decremented in the first place)
 //      b. Mark the order as refunded
 exports.refundOrder = onCall({ secrets: [paystackSecretKey] }, async (request) => {
   if (!request.auth) {
@@ -313,7 +329,11 @@ exports.refundOrder = onCall({ secrets: [paystackSecretKey] }, async (request) =
         if (!productSnaps[i].exists) return // product deleted since the order was placed — nothing to restore
         const updates = {}
         for (const [key, qty] of entry.quantities) {
-          updates[`stock.${key}`] = FieldValue.increment(qty)
+          if (entry.isPreorder) {
+            updates[`preorderCount.${key}`] = FieldValue.increment(-qty)
+          } else {
+            updates[`stock.${key}`] = FieldValue.increment(qty)
+          }
         }
         transaction.update(entry.ref, updates)
       })
